@@ -66,6 +66,19 @@ function handleWelcome(msg: any): void {
   loadChunk(state, 0, 0);
 }
 
+// Offset to convert server wall-clock timestamps (Date.now() ms) to client
+// performance.now() ms. Calibrated once on the first tick received.
+let serverTimeOffset: number | null = null;
+
+function serverTsToClientTs(serverTs: number): number {
+  if (serverTimeOffset === null) {
+    // Calibrate: server sent this tick at serverTs wall-clock time.
+    // At the moment we receive it, performance.now() ~ clientNow.
+    serverTimeOffset = performance.now() - serverTs;
+  }
+  return serverTs + serverTimeOffset;
+}
+
 function handleTick(msg: any): void {
   const now = performance.now();
   state.lastTickSeq = msg.seq ?? 0;
@@ -79,8 +92,15 @@ function handleTick(msg: any): void {
 
       // Skip own socket (dual-avatar fix)
       if (socketId === state.socketId) {
-        // Reconcile local player prediction
-        if (state.localPlayer && state.map) {
+        // Reconcile local player prediction.
+        // Skip for a short window after a chunk transition: the server's authoritative
+        // position is still in the old chunk's coordinate space and would snap the
+        // player back to the wrong edge.
+        const CHUNK_TRANSITION_GRACE_FRAMES = 10;
+        const recentTransition =
+          state.localPlayer &&
+          state.frame - state.localPlayer.chunkTransitionFrame < CHUNK_TRANSITION_GRACE_FRAMES;
+        if (state.localPlayer && state.map && !recentTransition) {
           reconcile(
             state.localPlayer,
             data.x, data.y,
@@ -120,7 +140,7 @@ function handleTick(msg: any): void {
 
       addRemotePlayerSnapshot(player, {
         seq: msg.seq ?? 0,
-        t: msg.t ?? Date.now(),
+        t: msg.t != null ? serverTsToClientTs(msg.t) : now,
         x: data.x,
         y: data.y,
         facing: (data.facing ?? "right") as Facing,
@@ -153,7 +173,7 @@ function handleTick(msg: any): void {
 
       addNPCSnapshot(npc, {
         seq: msg.seq ?? 0,
-        t: msg.t ?? Date.now(),
+        t: msg.t != null ? serverTsToClientTs(msg.t) : now,
         x: data.x,
         y: data.y,
       });
@@ -169,6 +189,7 @@ function handleTick(msg: any): void {
 function handleLegacyPlayers(msg: any): void {
   // V1 protocol: { type: "players", players: [...] }
   const now = performance.now();
+  const snapT = msg.t != null ? serverTsToClientTs(msg.t) : now;
   const seenIds = new Set<string>();
 
   for (const data of (msg.players ?? []) as any[]) {
@@ -204,7 +225,7 @@ function handleLegacyPlayers(msg: any): void {
 
     addRemotePlayerSnapshot(player, {
       seq: 0,
-      t: Date.now(),
+      t: snapT,
       x: data.x,
       y: data.y,
       facing: (data.facing ?? "right") as Facing,
@@ -218,6 +239,8 @@ function handleLegacyPlayers(msg: any): void {
 
 function handleNPCUpdate(msg: any): void {
   // V1 protocol: { type: "npc_update", npcs: [...] }
+  const now = performance.now();
+  const snapT = msg.t != null ? serverTsToClientTs(msg.t) : now;
   for (const data of (msg.npcs ?? []) as any[]) {
     let npc = state.npcs.get(data.name);
     if (!npc) {
@@ -236,7 +259,7 @@ function handleNPCUpdate(msg: any): void {
 
     addNPCSnapshot(npc, {
       seq: 0,
-      t: Date.now(),
+      t: snapT,
       x: data.x,
       y: data.y,
     });

@@ -24,6 +24,7 @@ export function initLocalPlayer(state: WorldState): void {
     chunkY: 0,
     pendingInputs: [],
     inputSeq: 0,
+    chunkTransitionFrame: -999,
   };
 }
 
@@ -139,6 +140,10 @@ export function tickLocalPlayer(state: WorldState, input: Readonly<InputState>):
     player.chunkY++;
     player.y = EDGE_BUFFER + 1;
     chunkChanged = true;
+  }
+
+  if (chunkChanged) {
+    player.chunkTransitionFrame = state.frame;
   }
 
   return { dx, dy, chunkChanged, moved };
