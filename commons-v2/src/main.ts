@@ -26,6 +26,8 @@ initChatModal();
 
 let lastFrameTime = performance.now();
 let lastMoveSeq = -1;
+let lastMoveSent = 0;
+const MOVE_SEND_INTERVAL_MS = 50; // 20Hz max — matches server tick rate
 
 function loop(now: number): void {
   const _dt = now - lastFrameTime;
@@ -37,10 +39,13 @@ function loop(now: number): void {
   // Tick local player
   const { dx, dy, chunkChanged, moved } = tickLocalPlayer(state, input);
 
-  // Send movement to server if moved or hop
+  // Send movement to server at most 20Hz (50ms intervals) to avoid flooding server
   if (moved && state.localPlayer && state.localPlayer.inputSeq !== lastMoveSeq) {
-    lastMoveSeq = state.localPlayer.inputSeq;
-    sendMove(state, dx, dy);
+    if (now - lastMoveSent >= MOVE_SEND_INTERVAL_MS) {
+      lastMoveSeq = state.localPlayer.inputSeq;
+      lastMoveSent = now;
+      sendMove(state, dx, dy);
+    }
   }
 
   // Handle chunk crossing

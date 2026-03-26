@@ -9,8 +9,10 @@ const NPC_HIT_RADIUS = 14; // px — half-width of NPC hitbox for click detectio
 let overlay: HTMLDivElement | null = null;
 let titleEl: HTMLSpanElement | null = null;
 let inputEl: HTMLTextAreaElement | null = null;
+let submitBtnEl: HTMLButtonElement | null = null;
 let bubbleEl: HTMLDivElement | null = null;
 let activeNPC: NPC | null = null;
+let currentAbortController: AbortController | null = null;
 
 function createModal(): void {
   overlay = document.createElement("div");
@@ -80,6 +82,23 @@ function createModal(): void {
     white-space: pre-wrap;
   `;
 
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display: flex; gap: 8px; margin-top: 4px;";
+
+  submitBtnEl = document.createElement("button");
+  submitBtnEl.textContent = "send";
+  submitBtnEl.style.cssText = `
+    background: #2a2a5a;
+    border: 1px solid #4a4a8a;
+    color: #c8c8f8;
+    font-family: monospace;
+    font-size: 11px;
+    padding: 4px 12px;
+    cursor: pointer;
+    border-radius: 3px;
+  `;
+  submitBtnEl.addEventListener("click", submitChat);
+
   const cancelBtn = document.createElement("button");
   cancelBtn.textContent = "cancel";
   cancelBtn.style.cssText = `
@@ -94,11 +113,14 @@ function createModal(): void {
   `;
   cancelBtn.addEventListener("click", closeModal);
 
+  btnRow.appendChild(submitBtnEl);
+  btnRow.appendChild(cancelBtn);
+
   box.appendChild(header);
   box.appendChild(inputEl);
   box.appendChild(hint);
   box.appendChild(bubbleEl);
-  box.appendChild(cancelBtn);
+  box.appendChild(btnRow);
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 
@@ -134,6 +156,11 @@ function closeModal(): void {
   if (!overlay) return;
   overlay.style.display = "none";
   activeNPC = null;
+  // Abort any in-flight LLM request when modal closes
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
 }
 
 function submitChat(): void {
@@ -141,39 +168,48 @@ function submitChat(): void {
   const text = inputEl.value.trim();
   if (!text) return;
 
-  const npc = activeNPC;
-  closeModal();
+  // Cancel any previous in-flight request before starting a new one
+  if (currentAbortController) currentAbortController.abort();
+  currentAbortController = new AbortController();
 
-  // Show response bubble in modal briefly, then it clears
-  // (In V2 there's no per-NPC bubble on canvas; just show in modal)
-  openModal(npc);
-  if (!inputEl || !bubbleEl) return;
-  inputEl.value = "";
+  const npc = activeNPC;
+  const abortController = currentAbortController;
+
+  // Keep modal open, show loading state
+  if (!inputEl || !bubbleEl || !submitBtnEl) return;
   inputEl.disabled = true;
+  submitBtnEl.disabled = true;
   bubbleEl.style.display = "block";
+  bubbleEl.style.color = "#a0f0c8";
   bubbleEl.textContent = "...";
 
   fetch("/api/invoke-persona", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: npc.name, prompt: text }),
+    signal: abortController.signal,
   })
     .then((r) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     })
     .then((data: { response?: string; error?: string }) => {
-      if (!bubbleEl || !inputEl) return;
+      if (!bubbleEl || !inputEl || !submitBtnEl) return;
       const raw = (data.response ?? data.error ?? "no response").trim();
       bubbleEl.textContent = raw;
       inputEl.disabled = false;
+      submitBtnEl.disabled = false;
+      currentAbortController = null;
       setTimeout(() => inputEl?.focus(), 50);
     })
     .catch((err: Error) => {
-      if (!bubbleEl || !inputEl) return;
+      if (err.name === "AbortError") return; // modal closed or new request started — ignore silently
+      if (!bubbleEl || !inputEl || !submitBtnEl) return;
       bubbleEl.textContent = `(error: ${err.message.slice(0, 60)})`;
       bubbleEl.style.color = "#f87171";
       inputEl.disabled = false;
+      submitBtnEl.disabled = false;
+      currentAbortController = null;
     });
 }
 
