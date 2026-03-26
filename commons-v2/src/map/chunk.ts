@@ -29,54 +29,78 @@ function seededRand(seed: number): () => number {
   };
 }
 
-// Hand-crafted chunk (0,0) — cross-paths, pond, buildings, fountain
+// Hand-crafted chunk (0,0) — matches V1 grazing.html buildChunk00 exactly
 function generateChunk00(): Uint8Array[] {
   const m: Uint8Array[] = [];
   for (let r = 0; r < ROWS; r++) m.push(new Uint8Array(COLS));
 
-  // Cross paths
+  // Horizontal path across middle (rows 17-18)
   for (let c = 0; c < COLS; c++) {
     m[17][c] = TILE_PATH;
     m[18][c] = TILE_PATH;
   }
+  // Vertical path down center (cols 24-25)
   for (let r = 0; r < ROWS; r++) {
     m[r][24] = TILE_PATH;
     m[r][25] = TILE_PATH;
   }
 
-  // Pond (bottom-right area)
+  // Pond bottom-left area (rows 22-27, cols 4-10)
   for (let r = 22; r <= 27; r++) {
-    for (let c = 35; c <= 43; c++) {
+    for (let c = 4; c <= 10; c++) {
       m[r][c] = TILE_WATER;
     }
   }
 
-  // Congress building (top-left) — tiles (2–8, 2–6)
+  // Congress building top-left (rows 2-6, cols 2-8)
   for (let r = 2; r <= 6; r++) {
     for (let c = 2; c <= 8; c++) {
       m[r][c] = TILE_BUILDING;
     }
   }
-  // Doorway at (5,5) — clear it
-  m[5][5] = TILE_PATH;
 
-  // Second building
-  for (let r = 8; r <= 12; r++) {
-    for (let c = 38; c <= 45; c++) {
-      m[r][c] = TILE_BUILDING;
+  // Building top-right (rows 2-6, cols 40-47)
+  for (let r = 2; r <= 6; r++) {
+    for (let c = 40; c <= 47; c++) {
+      if (c < COLS) m[r][c] = TILE_BUILDING;
     }
   }
 
-  // Third building
-  for (let r = 22; r <= 28; r++) {
-    for (let c = 2; c <= 10; c++) {
-      m[r][c] = TILE_BUILDING;
+  // Building bottom-right (rows 26-31, cols 38-46)
+  for (let r = 26; r <= 31; r++) {
+    for (let c = 38; c <= 46; c++) {
+      if (r < ROWS && c < COLS) m[r][c] = TILE_BUILDING;
     }
   }
 
-  // Fountain (3×3) near center
-  for (let r = 14; r <= 16; r++) {
-    for (let c = 11; c <= 13; c++) {
+  // Trees scattered (matching V1 exactly)
+  const trees: [number, number][] = [
+    [1,1],[1,12],[1,35],[1,48],
+    [8,3],[8,14],[8,38],[8,47],
+    [10,10],[10,30],[10,45],
+    [14,2],[14,20],[14,44],
+    [20,5],[20,15],[20,35],[20,48],
+    [22,18],[22,40],
+    [28,3],[28,20],[28,47],
+    [32,8],[32,30],[32,46],
+    [33,1],[33,48],
+    [34,14],[34,35],
+  ];
+  for (const [tr, tc] of trees) {
+    if (tr < ROWS && tc < COLS) m[tr][tc] = TILE_TREE;
+  }
+
+  // Rocks (matching V1 exactly)
+  const rocks: [number, number][] = [
+    [9,22],[11,40],[15,12],[16,32],[21,27],[25,14],[29,35],[31,12],[33,40],
+  ];
+  for (const [rr, rc] of rocks) {
+    if (rr < ROWS && rc < COLS) m[rr][rc] = TILE_ROCK;
+  }
+
+  // Fountain — 3×3 near path intersection (rows 13-15, cols 19-21)
+  for (let r = 13; r <= 15; r++) {
+    for (let c = 19; c <= 21; c++) {
       m[r][c] = TILE_FOUNTAIN;
     }
   }
