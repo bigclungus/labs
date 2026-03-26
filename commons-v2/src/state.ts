@@ -117,6 +117,10 @@ export interface WorldState {
   // Player name from /api/me (resolved async)
   playerName: string;
   playerColor: string;
+
+  // Mouse position in canvas coordinates (updated on mousemove)
+  mouseX: number;
+  mouseY: number;
 }
 
 export const TILE = 20;
@@ -162,5 +166,7 @@ export function createWorldState(): WorldState {
     frame: 0,
     playerName: adjAnimalName(),
     playerColor: randomColor(),
+    mouseX: -1,
+    mouseY: -1,
   };
 }

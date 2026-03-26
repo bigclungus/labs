@@ -1,6 +1,8 @@
 // input.ts — Keyboard/mouse/touch → InputState
 // Stateful but side-effect-free; state only changes on DOM events.
 
+import { isModalOpen } from "./ui/chat-modal.ts";
+
 export interface InputState {
   left: boolean;
   right: boolean;
@@ -48,6 +50,8 @@ export function initInput(): void {
     if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(e.key)) {
       e.preventDefault();
     }
+    // Suppress movement and hop while the chat modal is open — let the textarea capture input
+    if (isModalOpen()) return;
     state[field] = true;
   });
 

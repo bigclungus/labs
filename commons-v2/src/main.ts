@@ -80,6 +80,34 @@ canvas.addEventListener("click", (e: MouseEvent) => {
   checkNPCClick(state, mx, my);
 });
 
+// Track mouse position for NPC hover (name labels + cursor feedback)
+const NPC_HIT_RADIUS = 14;
+canvas.addEventListener("mousemove", (e: MouseEvent) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  state.mouseX = (e.clientX - rect.left) * scaleX;
+  state.mouseY = (e.clientY - rect.top) * scaleY;
+
+  // Cursor feedback: pointer when hovering over any NPC
+  let overNPC = false;
+  for (const npc of state.npcs.values()) {
+    const dx = state.mouseX - npc.displayX;
+    const dy = state.mouseY - (npc.displayY - 8);
+    if (Math.abs(dx) < NPC_HIT_RADIUS && Math.abs(dy) < NPC_HIT_RADIUS + 4) {
+      overNPC = true;
+      break;
+    }
+  }
+  canvas.style.cursor = overNPC ? "pointer" : "default";
+});
+
+canvas.addEventListener("mouseleave", () => {
+  state.mouseX = -1;
+  state.mouseY = -1;
+  canvas.style.cursor = "default";
+});
+
 // Fetch player name/color from /api/me before connecting — so WS sends correct name
 async function fetchAndConnect(): Promise<void> {
   try {

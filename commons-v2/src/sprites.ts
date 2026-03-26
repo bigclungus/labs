@@ -1,6 +1,29 @@
 // sprites.ts — Sprite winner polling for NPC rendering
 // Mirrors V1 grazing.html SPRITE_SLUG_MAP + fetchSpriteWinners logic
 
+// Maps NPC slug → human-readable display name
+export const NPC_DISPLAY_NAMES: Record<string, string> = {
+  'chairman':          'Ibrahim the Immovable',
+  'critic':            'Pippi the Pitiless',
+  'architect':         'Kwame the Constructor',
+  'ux':                'Yuki the Yielding',
+  'designer':          'Vesper the Vivid',
+  'galactus':          'Galactus',
+  'hume':              'David Hume',
+  'otto':              'Otto Atreides',
+  'pm':                "Chud O'Bikeshedder",
+  'spengler':          'Spengler the Doomed',
+  'trump':             'Punished Trump',
+  'uncle-bob':         'Uncle Bob',
+  'bloodfeast':        'Holden Bloodfeast',
+  'adelbert':          'Adelbert Hominem',
+  'jhaddu':            'Jhaddu',
+  'morgan':            'Morgan (they/them)',
+  'the-kid':           'The Kid',
+  'the-correspondent': 'The Correspondent',
+  'chaz':              'Chaz the Destroyer',
+};
+
 // Maps NPC name (server slug) → { id: sprite function ID, pollSlug: poll slug }
 const SPRITE_SLUG_MAP: Record<string, { id: string; pollSlug: string }> = {
   'chairman':   { id: 'chairman',   pollSlug: 'chairman'  },
