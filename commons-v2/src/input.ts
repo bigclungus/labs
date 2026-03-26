@@ -17,6 +17,17 @@ const state: InputState = {
   hop: false,
 };
 
+// Idle tracking — updated on any key/mouse/touch event
+let lastInputAt: number = Date.now();
+
+export function getLastInputAt(): number {
+  return lastInputAt;
+}
+
+function touchInput(): void {
+  lastInputAt = Date.now();
+}
+
 function keyToField(key: string): keyof InputState | null {
   switch (key) {
     case "ArrowLeft":  case "a": case "A": return "left";
@@ -30,6 +41,7 @@ function keyToField(key: string): keyof InputState | null {
 
 export function initInput(): void {
   window.addEventListener("keydown", (e) => {
+    touchInput();
     const field = keyToField(e.key);
     if (!field) return;
     // Prevent page scroll for arrow/space
@@ -40,11 +52,16 @@ export function initInput(): void {
   });
 
   window.addEventListener("keyup", (e) => {
+    touchInput();
     const field = keyToField(e.key);
     if (!field) return;
     // hop is consumed per-frame, don't clear on keyup — cleared in consumeHop()
     if (field !== "hop") state[field] = false;
   });
+
+  // Mouse and touch also count as activity
+  window.addEventListener("mousemove", touchInput, { passive: true });
+  window.addEventListener("touchstart", touchInput, { passive: true });
 }
 
 // Called once per game loop frame to get the current input snapshot

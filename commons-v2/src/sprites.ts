@@ -59,3 +59,31 @@ export function getWinner(npcName: string): string | null {
 export function getSpriteId(npcName: string): string | null {
   return SPRITE_SLUG_MAP[npcName]?.id ?? null;
 }
+
+// All expected sprite function names, derived from SPRITE_SLUG_MAP ids × variants A/B/C
+const SPRITE_FUNCTION_NAMES: string[] = Object.values(SPRITE_SLUG_MAP).flatMap(({ id }) => [
+  `drawSprite_${id}_A`,
+  `drawSprite_${id}_B`,
+  `drawSprite_${id}_C`,
+]);
+
+/**
+ * Validates that all expected sprite functions are present on window.
+ * Called at startup (with a delay to allow sprite scripts to load).
+ * Missing sprites fall back to colored boxes — this is expected if scripts
+ * haven't loaded yet, but a persistent warning indicates a load failure.
+ */
+export function validateSprites(): void {
+  const missing: string[] = [];
+  for (const name of SPRITE_FUNCTION_NAMES) {
+    if (typeof (window as any)[name] !== 'function') {
+      missing.push(name);
+    }
+  }
+  if (missing.length > 0) {
+    console.warn('[sprites] missing sprite functions:', missing);
+    // Missing sprites will fall back to colored boxes — expected if scripts haven't loaded yet
+  } else {
+    console.log('[sprites] all', SPRITE_FUNCTION_NAMES.length, 'sprite functions validated OK');
+  }
+}

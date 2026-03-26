@@ -2,8 +2,8 @@
 // Entry point for CommonsV2. Owns the canvas, runs the loop.
 
 import { createWorldState } from "./state.ts";
-import { initInput, getInput } from "./input.ts";
-import { initNetwork, sendMove, sendHop, sendChunk } from "./network.ts";
+import { initInput, getInput, getLastInputAt } from "./input.ts";
+import { initNetwork, sendMove, sendHop, sendChunk, sendStatus } from "./network.ts";
 import { tickLocalPlayer } from "./entities/local-player.ts";
 import { tickRemotePlayers } from "./entities/remote-player.ts";
 import { tickNPCs } from "./entities/npc.ts";
@@ -11,6 +11,7 @@ import { getChunk } from "./map/chunk.ts";
 import { invalidateTileCache } from "./map/renderer.ts";
 import { render } from "./renderer.ts";
 import { initChatModal, checkNPCClick } from "./ui/chat-modal.ts";
+import { validateSprites } from "./sprites.ts";
 
 const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -102,3 +103,19 @@ async function fetchAndConnect(): Promise<void> {
 }
 
 fetchAndConnect();
+
+// Item 9: Idle timer for away detection (additive to visibilitychange handler in network.ts)
+const IDLE_THRESHOLD_MS = 60_000;
+setInterval(() => {
+  if (!state.localPlayer) return;
+  const idle = Date.now() - getLastInputAt() > IDLE_THRESHOLD_MS;
+  if (idle !== state.localPlayer.isAway) {
+    state.localPlayer.isAway = idle;
+    sendStatus(idle);
+  }
+}, 5_000);
+
+// Item 10: Sprite load validation — delay 2s to allow sprite scripts to load
+setTimeout(() => {
+  validateSprites();
+}, 2_000);
