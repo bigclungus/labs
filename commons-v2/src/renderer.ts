@@ -236,6 +236,34 @@ export function render(state: WorldState, ctx: CanvasRenderingContext2D, frame: 
     drawPlayerLabel(ctx, p.x, p.y, p.name, p.hopFrame);
   }
 
+  // Congress building label (chunk 0,0 only)
+  if (localChunkX === 0 && localChunkY === 0) {
+    ctx.save();
+    ctx.font = "bold 8px monospace";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.fillText("CONGRESS", 5 * TILE + TILE / 2 + 1, 2 * TILE - 2);
+    ctx.fillStyle = "#c8c8e8";
+    ctx.fillText("CONGRESS", 5 * TILE + TILE / 2, 2 * TILE - 3);
+    ctx.restore();
+
+    // Congress flag when session is active
+    if (state.congress.active) {
+      ctx.save();
+      const fx = 5 * TILE;
+      const fy = TILE;
+      ctx.fillStyle = "#222";
+      ctx.fillRect(fx, fy, 2, TILE); // pole
+      ctx.fillStyle = "#f87171";
+      ctx.fillRect(fx + 2, fy, 12, 8); // flag body
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(fx + 4, fy + 2, 2, 4); // scale icon — left arm
+      ctx.fillRect(fx + 8, fy + 2, 2, 4); // right arm
+      ctx.fillRect(fx + 6, fy + 1, 2, 2); // centre top
+      ctx.restore();
+    }
+  }
+
   // HUD
   drawHUD(ctx, state);
 

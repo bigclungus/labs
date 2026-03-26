@@ -10,6 +10,7 @@ import { tickNPCs } from "./entities/npc.ts";
 import { getChunk } from "./map/chunk.ts";
 import { invalidateTileCache } from "./map/renderer.ts";
 import { render } from "./renderer.ts";
+import { initChatModal, checkNPCClick } from "./ui/chat-modal.ts";
 
 const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -19,7 +20,7 @@ const state = createWorldState();
 // -- Init -------------------------------------------------------------------
 
 initInput();
-initNetwork(state);
+initChatModal();
 
 // -- Game loop --------------------------------------------------------------
 
@@ -63,17 +64,36 @@ function loop(now: number): void {
   requestAnimationFrame(loop);
 }
 
-// Fetch player name from /api/me if available
-fetch("/api/me")
-  .then(r => r.ok ? r.json() : null)
-  .then(data => {
-    if (data?.login) {
-      state.playerName = data.login;
-      if (state.localPlayer) state.localPlayer.name = data.login;
-    }
-  })
-  .catch(() => {
-    // /api/me not available in lab context — use random name
-  });
+// Canvas click — check for NPC hit and open chat modal
+canvas.addEventListener("click", (e: MouseEvent) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+  checkNPCClick(state, mx, my);
+});
 
-requestAnimationFrame(loop);
+// Fetch player name/color from /api/me before connecting — so WS sends correct name
+async function fetchAndConnect(): Promise<void> {
+  try {
+    const res = await fetch("/api/me");
+    if (res.ok) {
+      const data = await res.json();
+      // /api/me returns { username: string|null }
+      const name = data?.username ?? data?.login ?? data?.name ?? null;
+      if (name) {
+        state.playerName = name;
+      }
+      if (data?.color) {
+        state.playerColor = data.color;
+      }
+    }
+  } catch {
+    // /api/me not available — keep random name
+  }
+  initNetwork(state);
+  requestAnimationFrame(loop);
+}
+
+fetchAndConnect();

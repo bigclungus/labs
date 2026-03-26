@@ -120,10 +120,73 @@ function drawTile(
       break;
     }
     case TILE_BUILDING:
-      ctx.fillStyle = colors.building;
-      ctx.fillRect(x, y, TILE, TILE);
-      ctx.fillStyle = colors.buildingRoof;
-      ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+      // Congress / council building (rows 2-6, cols 2-8 in chunk 0,0)
+      if (ty >= 2 && ty <= 6 && tx >= 2 && tx <= 8) {
+        // Base: deep indigo wall
+        ctx.fillStyle = "#2a2050";
+        ctx.fillRect(x, y, TILE, TILE);
+        ctx.fillStyle = "#3a3068";
+        ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+
+        if (ty === 2) {
+          // Pediment row: triangular peak effect
+          const distFromCenter = Math.abs(tx - 5);
+          const peakColor = distFromCenter <= 1 ? "#8a8aaa" : distFromCenter <= 2 ? "#6a6a8a" : "#4a4a6a";
+          ctx.fillStyle = peakColor;
+          ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+          const triH = Math.max(0, (3 - distFromCenter) * 4);
+          if (triH > 0) {
+            ctx.fillStyle = "#9a9abb";
+            ctx.fillRect(x + 2, y + 1, TILE - 4, triH);
+          }
+        } else if (ty === 6) {
+          // Steps row
+          ctx.fillStyle = "#4a4080";
+          ctx.fillRect(x, y + 10, TILE, 6);
+          ctx.fillStyle = "#5a5090";
+          ctx.fillRect(x, y + 12, TILE, 4);
+          ctx.fillStyle = "#6a60a0";
+          ctx.fillRect(x, y + 14, TILE, TILE - 14);
+        }
+
+        // Columns at tx 2, 4, 6, 8
+        if (tx === 2 || tx === 4 || tx === 6 || tx === 8) {
+          if (ty > 2 && ty < 6) {
+            ctx.fillStyle = "#7a7a9a";
+            ctx.fillRect(x + 5, y, 5, TILE);
+            ctx.fillStyle = "#9a9ab8";
+            ctx.fillRect(x + 6, y, 2, TILE);
+          } else if (ty === 6) {
+            ctx.fillStyle = "#7a7a9a";
+            ctx.fillRect(x + 5, y, 5, 10);
+          }
+        }
+
+        // Doorway at center column, lower rows
+        if (tx === 5 && (ty === 5 || ty === 6)) {
+          ctx.fillStyle = "#000010";
+          ctx.fillRect(x + 3, y + (ty === 5 ? 4 : 0), 9, ty === 5 ? TILE - 4 : 10);
+          // Amber glow
+          ctx.fillStyle = "rgba(240,208,96,0.27)";
+          ctx.fillRect(x + 2, y + (ty === 5 ? 4 : 0), 1, ty === 5 ? TILE - 4 : 10);
+          ctx.fillRect(x + 12, y + (ty === 5 ? 4 : 0), 1, ty === 5 ? TILE - 4 : 10);
+          if (ty === 5) {
+            ctx.fillStyle = "rgba(240,208,96,0.4)";
+            ctx.fillRect(x + 3, y + 3, 9, 2);
+          }
+        }
+      } else {
+        // Generic building tile
+        ctx.fillStyle = colors.building;
+        ctx.fillRect(x, y, TILE, TILE);
+        ctx.fillStyle = colors.buildingRoof;
+        ctx.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+        // Window
+        if ((tx + ty) % 3 === 0) {
+          ctx.fillStyle = "rgba(240,208,96,0.67)";
+          ctx.fillRect(x + 4, y + 4, 4, 5);
+        }
+      }
       break;
     case TILE_TREE: {
       // Trunk
