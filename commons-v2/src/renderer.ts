@@ -3,6 +3,7 @@
 
 import { WorldState, LocalPlayer, RemotePlayer, NPC, Facing, TILE, CANVAS_W, CANVAS_H } from "./state.ts";
 import { getOrBuildTileCache, getSeason } from "./map/renderer.ts";
+import { getWinner, getSpriteId } from "./sprites.ts";
 
 const HOP_FRAMES = 12;
 const PLAYER_SIZE = 12;
@@ -110,28 +111,47 @@ function drawNPC(
   const y = npc.displayY;
   const hopOff = -hopOffset(npc.hopFrame ?? 0);
 
-  // Distinct NPC color palette by name hash
-  const hash = npc.name.split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
-  const hue = Math.abs(hash) % 360;
-  const color = `hsl(${hue},60%,45%)`;
+  // Sprite feet position: bottom of the 16px box + hop
+  const cy_feet = y + 8 + hopOff;
+
+  const spriteId = getSpriteId(npc.name);
+  const winner = spriteId ? getWinner(npc.name) : null;
+  const spriteFn: ((ctx: CanvasRenderingContext2D, x: number, y: number) => void) | null =
+    winner && spriteId ? ((window as any)[`drawSprite_${spriteId}_${winner}`] ?? null) : null;
 
   ctx.save();
-  ctx.fillStyle = color;
-  ctx.fillRect(x - 8, y - 8 + hopOff, 16, 16);
 
-  // Face direction mark
-  ctx.fillStyle = "rgba(255,255,255,0.7)";
-  const eyeX = npc.facing === "right" ? x + 3 : x - 3;
-  ctx.fillRect(eyeX - 1, y - 2 + hopOff, 2, 3);
+  if (typeof spriteFn === "function") {
+    // Flip horizontally for left-facing NPCs
+    if (npc.facing === "left") {
+      ctx.translate(x * 2, 0);
+      ctx.scale(-1, 1);
+    }
+    spriteFn(ctx, x, cy_feet);
+  } else {
+    // Fallback: colored box with direction mark
+    const hash = npc.name.split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
+    const hue = Math.abs(hash) % 360;
+    const color = `hsl(${hue},60%,45%)`;
 
-  // Label
+    ctx.fillStyle = color;
+    ctx.fillRect(x - 8, y - 8 + hopOff, 16, 16);
+
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    const eyeX = npc.facing === "right" ? x + 3 : x - 3;
+    ctx.fillRect(eyeX - 1, y - 2 + hopOff, 2, 3);
+  }
+
+  ctx.restore();
+
+  // Label (always drawn, outside the flip transform)
+  ctx.save();
   ctx.font = "8px monospace";
   ctx.textAlign = "center";
   ctx.fillStyle = "rgba(0,0,0,0.6)";
   ctx.fillText(npc.name, x + 1, y - 12 + hopOff);
   ctx.fillStyle = "#fff";
   ctx.fillText(npc.name, x, y - 13 + hopOff);
-
   ctx.restore();
 }
 
