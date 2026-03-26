@@ -175,6 +175,7 @@ function handleTick(msg: any): void {
 
   // Update NPCs
   if (msg.npcs) {
+    const BLURB_DISPLAY_MS = 7500; // 7.5s to match server TTL (150 ticks @ 20Hz)
     for (const data of msg.npcs as any[]) {
       let npc = state.npcs.get(data.name);
       if (!npc) {
@@ -189,6 +190,20 @@ function handleTick(msg: any): void {
         state.npcs.set(data.name, npc);
       } else {
         npc.facing = (data.facing ?? npc.facing) as Facing;
+      }
+
+      // Blurb: if server sends a new blurb (or clears it), update client state
+      if ("blurb" in data) {
+        if (data.blurb) {
+          // Only update if it's a different blurb (avoid resetting expiry on re-sends)
+          if (npc.blurb !== data.blurb) {
+            npc.blurb = data.blurb;
+            npc.blurbExpiry = performance.now() + BLURB_DISPLAY_MS;
+          }
+        } else {
+          npc.blurb = undefined;
+          npc.blurbExpiry = undefined;
+        }
       }
 
       addNPCSnapshot(npc, {

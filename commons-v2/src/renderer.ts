@@ -104,12 +104,65 @@ function drawPlayerLabel(
 // NPC hitbox half-size — must match the value in main.ts
 const NPC_HIT_RADIUS = 14;
 
+// -- Speech bubble ----------------------------------------------------------
+
+function drawSpeechBubble(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  topY: number,
+  text: string,
+  alpha: number
+): void {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = "8px monospace";
+  ctx.textAlign = "center";
+
+  const padding = 4;
+  const textW = ctx.measureText(text).width;
+  const bw = textW + padding * 2;
+  const bh = 12;
+  const bx = cx - bw / 2;
+  const by = topY - bh - 6;
+
+  // Bubble background with tail
+  ctx.fillStyle = "rgba(255,255,255,0.93)";
+  ctx.strokeStyle = "rgba(0,0,0,0.3)";
+  ctx.lineWidth = 0.8;
+
+  ctx.beginPath();
+  const r = 3;
+  ctx.moveTo(bx + r, by);
+  ctx.lineTo(bx + bw - r, by);
+  ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + r);
+  ctx.lineTo(bx + bw, by + bh - r);
+  ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - r, by + bh);
+  // Tail pointing down toward NPC
+  ctx.lineTo(cx + 3, by + bh);
+  ctx.lineTo(cx, by + bh + 5);
+  ctx.lineTo(cx - 3, by + bh);
+  ctx.lineTo(bx + r, by + bh);
+  ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - r);
+  ctx.lineTo(bx, by + r);
+  ctx.quadraticCurveTo(bx, by, bx + r, by);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Text
+  ctx.fillStyle = "rgba(20,20,20,0.9)";
+  ctx.fillText(text, cx, by + bh - 3);
+
+  ctx.restore();
+}
+
 // -- NPC drawing ------------------------------------------------------------
 
 function drawNPC(
   ctx: CanvasRenderingContext2D,
   npc: NPC,
   frame: number,
+  now: number,
   mouseX: number,
   mouseY: number
 ): void {
@@ -187,6 +240,16 @@ function drawNPC(
     ctx.fillStyle = "#e8e8ff";
     ctx.fillText(displayName, lx, ly);
     ctx.restore();
+  }
+
+  // Speech bubble — draw above label (or above sprite if not hovered)
+  if (npc.blurb && npc.blurbExpiry !== undefined && npc.blurbExpiry > now) {
+    const remaining = npc.blurbExpiry - now;
+    const fadeMs = 1200; // fade out over last 1.2s
+    const alpha = remaining < fadeMs ? remaining / fadeMs : 1.0;
+    // Anchor above sprite — label is at y-14, bubble goes above that
+    const bubbleY = y - 14 + hopOff - (hovered ? 12 : 0);
+    drawSpeechBubble(ctx, x, bubbleY, npc.blurb, alpha);
   }
 }
 
@@ -280,8 +343,9 @@ export function render(state: WorldState, ctx: CanvasRenderingContext2D, frame: 
   }
 
   // NPCs
+  const renderNow = performance.now();
   for (const npc of state.npcs.values()) {
-    drawNPC(ctx, npc, frame, state.mouseX, state.mouseY);
+    drawNPC(ctx, npc, frame, renderNow, state.mouseX, state.mouseY);
   }
 
   // Local player (drawn on top)

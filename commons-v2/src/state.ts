@@ -65,6 +65,9 @@ export interface NPC {
   snapshots: NPCSnapshot[];
   displayX: number;
   displayY: number;
+  // Speech blurb — set from server, expires client-side
+  blurb?: string;
+  blurbExpiry?: number; // performance.now() ms when the blurb should disappear
 }
 
 export interface NPCSnapshot {

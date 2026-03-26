@@ -37,5 +37,10 @@ export function interpolateNPC(npc: NPC, now: number): void {
 export function tickNPCs(npcs: Map<string, NPC>, now: number): void {
   for (const npc of npcs.values()) {
     interpolateNPC(npc, now);
+    // Expire blurbs client-side (belt-and-suspenders — server also clears them)
+    if (npc.blurbExpiry !== undefined && performance.now() > npc.blurbExpiry) {
+      npc.blurb = undefined;
+      npc.blurbExpiry = undefined;
+    }
   }
 }
