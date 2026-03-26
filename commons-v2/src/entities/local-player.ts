@@ -24,7 +24,7 @@ export function initLocalPlayer(state: WorldState): void {
     chunkY: 0,
     pendingInputs: [],
     inputSeq: 0,
-    chunkTransitionFrame: -999,
+    chunkTransitionAt: 0,
   };
 }
 
@@ -143,7 +143,7 @@ export function tickLocalPlayer(state: WorldState, input: Readonly<InputState>):
   }
 
   if (chunkChanged) {
-    player.chunkTransitionFrame = state.frame;
+    player.chunkTransitionAt = Date.now();
   }
 
   return { dx, dy, chunkChanged, moved };
@@ -183,4 +183,12 @@ export function reconcile(
     player.y = predY + errY * 0.33;
   }
   // If errDist >= 8 or 0: hard snap (already done by setting to replayed position)
+
+  // Fix 1: velocity reconciliation — when position is corrected by more than 2px,
+  // clear pending inputs so replayed inputs don't immediately re-diverge the player
+  // from the corrected position. In this input-driven model (no explicit vx/vy),
+  // clearing pendingInputs is equivalent to zeroing velocity after a hard snap.
+  if (errDist > 2) {
+    player.pendingInputs = [];
+  }
 }

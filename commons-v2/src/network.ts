@@ -13,6 +13,11 @@ import { invalidateTileCache } from "./map/renderer.ts";
 
 const RECONNECT_DELAY_MS = 3000;
 
+// Fix 2: move sequencing — reject reconciliation from stale server echoes.
+// Only reconcile if the server has processed an input within MOVE_BUFFER_SIZE
+// of the current sequence, preventing backward teleports from old ticks.
+const MOVE_BUFFER_SIZE = 3;
+
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let state: WorldState;
@@ -96,15 +101,23 @@ function handleTick(msg: any): void {
         // Skip for a short window after a chunk transition: the server's authoritative
         // position is still in the old chunk's coordinate space and would snap the
         // player back to the wrong edge.
-        const CHUNK_TRANSITION_GRACE_FRAMES = 10;
+        const CHUNK_TRANSITION_GRACE_MS = 200;
         const recentTransition =
           state.localPlayer &&
-          state.frame - state.localPlayer.chunkTransitionFrame < CHUNK_TRANSITION_GRACE_FRAMES;
-        if (state.localPlayer && state.map && !recentTransition) {
+          Date.now() - state.localPlayer.chunkTransitionAt < CHUNK_TRANSITION_GRACE_MS;
+        // Fix 2: move sequencing guard — only reconcile if the server echo is
+        // recent enough. If lastProcessedInput is more than MOVE_BUFFER_SIZE
+        // behind the current inputSeq, the tick is stale and we skip it to
+        // prevent backward teleports from old echoes.
+        const lastProcessed = msg.lastProcessedInput ?? 0;
+        const seqGuardPassed =
+          !state.localPlayer ||
+          lastProcessed >= state.localPlayer.inputSeq - MOVE_BUFFER_SIZE;
+        if (state.localPlayer && state.map && !recentTransition && seqGuardPassed) {
           reconcile(
             state.localPlayer,
             data.x, data.y,
-            msg.lastProcessedInput ?? 0,
+            lastProcessed,
             state.map
           );
         }

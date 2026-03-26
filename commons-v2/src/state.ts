@@ -44,8 +44,8 @@ export interface LocalPlayer {
   // Client-side prediction
   pendingInputs: PendingInput[];
   inputSeq: number;
-  // Frame number of the last chunk transition (used to suppress stale reconciliation)
-  chunkTransitionFrame: number;
+  // Wall-clock timestamp (Date.now()) of the last chunk transition (used to suppress stale reconciliation)
+  chunkTransitionAt: number;
 }
 
 export interface PendingInput {

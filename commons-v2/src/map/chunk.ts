@@ -182,15 +182,28 @@ export function generateChunk(cx: number, cy: number): Uint8Array[] {
   return m;
 }
 
-// Cache for generated chunks
+// Cache for generated chunks — LRU capped at MAX_CACHE_SIZE to prevent OOM on long sessions
+const MAX_CACHE_SIZE = 16;
 const chunkCache = new Map<string, Uint8Array[]>();
+const cacheOrder: string[] = [];
 
 export function getChunk(cx: number, cy: number): Uint8Array[] {
   const key = `${cx},${cy}`;
   let chunk = chunkCache.get(key);
-  if (!chunk) {
-    chunk = generateChunk(cx, cy);
-    chunkCache.set(key, chunk);
+  if (chunk) {
+    // Move to end (most recently used)
+    const idx = cacheOrder.indexOf(key);
+    if (idx !== -1) cacheOrder.splice(idx, 1);
+    cacheOrder.push(key);
+    return chunk;
+  }
+  chunk = generateChunk(cx, cy);
+  chunkCache.set(key, chunk);
+  cacheOrder.push(key);
+  // Evict oldest entry if over cap
+  if (cacheOrder.length > MAX_CACHE_SIZE) {
+    const oldest = cacheOrder.shift()!;
+    chunkCache.delete(oldest);
   }
   return chunk;
 }
