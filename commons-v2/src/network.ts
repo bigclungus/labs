@@ -246,7 +246,10 @@ function handleNPCUpdate(msg: any): void {
 function onMessage(e: MessageEvent): void {
   let msg: any;
   try {
-    msg = JSON.parse(e.data);
+    const raw = e.data instanceof ArrayBuffer
+      ? new TextDecoder().decode(e.data)
+      : e.data;
+    msg = JSON.parse(raw);
   } catch {
     console.warn("[network] failed to parse message:", e.data);
     return;
@@ -283,6 +286,8 @@ function connect(worldState: WorldState): void {
 
   console.log("[network] connecting to", url);
   ws = new WebSocket(url);
+
+  ws.binaryType = "arraybuffer";
 
   ws.onopen = () => {
     console.log("[network] connected");
