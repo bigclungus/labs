@@ -276,9 +276,10 @@ function connect(worldState: WorldState): void {
 
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
-  const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const params = new URLSearchParams({ name: state.playerName, color: state.playerColor });
-  const url = `${proto}//${location.host}/commons-ws?${params}`;
+  // Use injected WS base if available (labs router doesn't proxy WS upgrades)
+  const wsBase = (window as any).__COMMONS_WS_BASE ?? `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
+  const url = `${wsBase}/commons-ws?${params}`;
 
   console.log("[network] connecting to", url);
   ws = new WebSocket(url);

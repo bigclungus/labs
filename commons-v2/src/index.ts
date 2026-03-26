@@ -30,7 +30,8 @@ async function buildBundle(): Promise<void> {
 
 await buildBundle();
 
-const indexHTML = `<!DOCTYPE html>
+function buildIndexHTML(basePath: string): string {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -80,7 +81,10 @@ const indexHTML = `<!DOCTYPE html>
     <div id="v2-badge">CommonsV2</div>
   </div>
   <div id="error-banner"></div>
-  <script type="module">
+  <script>
+    // CommonsV2 connects directly to clung.us commons-server WS
+    // (labs router doesn't proxy WS upgrades)
+    window.__COMMONS_WS_BASE = location.protocol === "https:" ? "wss://clung.us" : "ws://clung.us";
     window.addEventListener("error", (e) => {
       document.getElementById("error-banner").textContent = "JS Error: " + e.message + " (" + e.filename + ":" + e.lineno + ")";
     });
@@ -88,9 +92,10 @@ const indexHTML = `<!DOCTYPE html>
       document.getElementById("error-banner").textContent = "Unhandled: " + e.reason;
     });
   </script>
-  <script type="module" src="/__bundle/main.js"></script>
+  <script type="module" src="${basePath}/__bundle/main.js"></script>
 </body>
 </html>`;
+}
 
 const server = Bun.serve({
   port: PORT,
@@ -121,7 +126,7 @@ const server = Bun.serve({
       url.pathname === `${base}/` ||
       url.pathname === base
     ) {
-      return new Response(indexHTML, {
+      return new Response(buildIndexHTML(base), {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
     }
