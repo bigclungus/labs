@@ -3,7 +3,7 @@
 
 import { WorldState, LocalPlayer, RemotePlayer, NPC, Facing, TILE, CANVAS_W, CANVAS_H } from "./state.ts";
 import { getOrBuildTileCache, getSeason } from "./map/renderer.ts";
-import { getWinner, getSpriteId } from "./sprites.ts";
+import { getWinner, getSpriteId, NPC_DISPLAY_NAMES } from "./sprites.ts";
 
 const HOP_FRAMES = 12;
 const PLAYER_SIZE = 12;
@@ -101,12 +101,17 @@ function drawPlayerLabel(
   ctx.restore();
 }
 
+// NPC hitbox half-size — must match the value in main.ts
+const NPC_HIT_RADIUS = 14;
+
 // -- NPC drawing ------------------------------------------------------------
 
 function drawNPC(
   ctx: CanvasRenderingContext2D,
   npc: NPC,
-  frame: number
+  frame: number,
+  mouseX: number,
+  mouseY: number
 ): void {
   const x = npc.displayX;
   const y = npc.displayY;
@@ -115,6 +120,11 @@ function drawNPC(
   // Sprite feet position: bottom of the 16px box + hop
   const cy_feet = y + 8 + hopOff;
 
+  // Hover detection
+  const mdx = mouseX - x;
+  const mdy = mouseY - (y - 8);
+  const hovered = Math.abs(mdx) < NPC_HIT_RADIUS && Math.abs(mdy) < NPC_HIT_RADIUS + 4;
+
   const spriteId = getSpriteId(npc.name);
   const winner = spriteId ? getWinner(npc.name) : null;
   const spriteFn: ((ctx: CanvasRenderingContext2D, x: number, y: number) => void) | null =
@@ -122,7 +132,19 @@ function drawNPC(
 
   ctx.save();
 
+  // Hover highlight: glow ring behind the sprite
+  if (hovered) {
+    ctx.save();
+    ctx.shadowColor = "rgba(200,200,255,0.9)";
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "rgba(200,200,255,0.18)";
+    ctx.fillRect(x - 10, y - 10 + hopOff, 20, 20);
+    ctx.restore();
+  }
+
   if (typeof spriteFn === "function") {
+    // Brightness boost on hover
+    if (hovered) ctx.filter = "brightness(1.3)";
     // Flip horizontally for left-facing NPCs
     if (npc.facing === "left") {
       ctx.translate(x * 2, 0);
@@ -133,7 +155,8 @@ function drawNPC(
     // Fallback: colored box with direction mark
     const hash = npc.name.split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0);
     const hue = Math.abs(hash) % 360;
-    const color = `hsl(${hue},60%,45%)`;
+    const lightness = hovered ? 58 : 45;
+    const color = `hsl(${hue},60%,${lightness}%)`;
 
     ctx.fillStyle = color;
     ctx.fillRect(x - 8, y - 8 + hopOff, 16, 16);
@@ -145,15 +168,26 @@ function drawNPC(
 
   ctx.restore();
 
-  // Label (always drawn, outside the flip transform)
-  ctx.save();
-  ctx.font = "8px monospace";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
-  ctx.fillText(npc.name, x + 1, y - 12 + hopOff);
-  ctx.fillStyle = "#fff";
-  ctx.fillText(npc.name, x, y - 13 + hopOff);
-  ctx.restore();
+  // Label: only draw when hovered, using display name
+  if (hovered) {
+    const displayName = NPC_DISPLAY_NAMES[npc.name] ?? npc.name;
+    ctx.save();
+    ctx.font = "bold 9px monospace";
+    ctx.textAlign = "center";
+    // Measure text width for background pill
+    const tw = ctx.measureText(displayName).width;
+    const lx = x;
+    const ly = y - 14 + hopOff;
+    // Background pill
+    ctx.fillStyle = "rgba(20,20,40,0.82)";
+    ctx.beginPath();
+    ctx.roundRect(lx - tw / 2 - 4, ly - 10, tw + 8, 13, 3);
+    ctx.fill();
+    // Text
+    ctx.fillStyle = "#e8e8ff";
+    ctx.fillText(displayName, lx, ly);
+    ctx.restore();
+  }
 }
 
 // -- Connection overlay -----------------------------------------------------
@@ -174,8 +208,24 @@ function drawConnectingOverlay(ctx: CanvasRenderingContext2D): void {
 
 // -- Debug HUD --------------------------------------------------------------
 
+// Hidden by default; toggle with backtick (`) or F3
+let debugVisible = false;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key === "`" || e.key === "F3") {
+      e.preventDefault();
+      debugVisible = !debugVisible;
+    }
+  });
+}
+
 function drawHUD(ctx: CanvasRenderingContext2D, state: WorldState): void {
+  if (!debugVisible) return;
+
   const player = state.localPlayer;
+  // Include local player in count — remotePlayers only tracks other players
+  const totalPlayers = state.remotePlayers.size + (state.localPlayer ? 1 : 0);
   ctx.save();
   ctx.font = "10px monospace";
   ctx.fillStyle = "rgba(0,0,0,0.5)";
@@ -186,7 +236,7 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: WorldState): void {
   const lines = [
     `CommonsV2 [${player ? `(${Math.round(player.x)},${Math.round(player.y)})` : "no player"}]`,
     `chunk: (${player?.chunkX ?? 0}, ${player?.chunkY ?? 0})`,
-    `players: ${state.remotePlayers.size}  npcs: ${state.npcs.size}`,
+    `players: ${totalPlayers}  npcs: ${state.npcs.size}`,
     `frame: ${state.frame}  ${state.connected ? "● connected" : "○ offline"}`,
   ];
 
@@ -231,7 +281,7 @@ export function render(state: WorldState, ctx: CanvasRenderingContext2D, frame: 
 
   // NPCs
   for (const npc of state.npcs.values()) {
-    drawNPC(ctx, npc, frame);
+    drawNPC(ctx, npc, frame, state.mouseX, state.mouseY);
   }
 
   // Local player (drawn on top)
