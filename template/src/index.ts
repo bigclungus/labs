@@ -12,6 +12,10 @@ const server = Bun.serve({
   fetch(req) {
     const url = new URL(req.url);
 
+    // Base path injected by the labs-router (e.g. "/mylab").
+    // Falls back to "" so the lab also works when run directly (without the router).
+    const base = req.headers.get("X-Lab-Base-Path") ?? "";
+
     if (url.pathname === "/" || url.pathname === "") {
       db.run(`INSERT INTO visits DEFAULT VALUES`);
       const count = (db.query(`SELECT COUNT(*) as c FROM visits`).get() as { c: number }).c;
@@ -32,7 +36,7 @@ const server = Bun.serve({
 <body>
   <h1>Hello from <strong>${LAB_NAME}</strong></h1>
   <p>This lab has been visited <span class="count">${count}</span> time(s).</p>
-  <p><a href="/" style="color:#7eb8f7">refresh</a></p>
+  <p><a href="${base}/" style="color:#7eb8f7">refresh</a></p>
 </body>
 </html>`,
         { headers: { "Content-Type": "text/html; charset=utf-8" } }
