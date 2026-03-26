@@ -1,0 +1,159 @@
+// state.ts — WorldState type definitions and mutable singleton
+// Only network.ts and local-player.ts may mutate this state.
+// renderer.ts and all other modules read only.
+
+export type Facing = "left" | "right";
+
+export interface RemotePlayer {
+  socketId: string;
+  name: string;
+  color: string;
+  x: number;
+  y: number;
+  facing: Facing;
+  hopFrame: number;
+  isAway: boolean;
+  chunkX: number;
+  chunkY: number;
+  // Interpolation buffer
+  snapshots: PlayerSnapshot[];
+  // Lerp display position
+  displayX: number;
+  displayY: number;
+}
+
+export interface PlayerSnapshot {
+  seq: number;
+  t: number;
+  x: number;
+  y: number;
+  facing: Facing;
+}
+
+export interface LocalPlayer {
+  socketId: string;
+  name: string;
+  color: string;
+  x: number;
+  y: number;
+  facing: Facing;
+  hopFrame: number;
+  isAway: boolean;
+  chunkX: number;
+  chunkY: number;
+  // Client-side prediction
+  pendingInputs: PendingInput[];
+  inputSeq: number;
+}
+
+export interface PendingInput {
+  seq: number;
+  dx: number;
+  dy: number;
+  timestamp: number;
+}
+
+export interface NPC {
+  name: string;
+  x: number;
+  y: number;
+  facing: Facing;
+  hopFrame?: number;
+  // Interpolation buffer
+  snapshots: NPCSnapshot[];
+  displayX: number;
+  displayY: number;
+}
+
+export interface NPCSnapshot {
+  seq: number;
+  t: number;
+  x: number;
+  y: number;
+}
+
+export interface CongressState {
+  active: boolean;
+  topic?: string;
+  debaters?: string[];
+}
+
+export interface WorldState {
+  // Connection
+  connected: boolean;
+  socketId: string | null;
+
+  // Local player (predicted)
+  localPlayer: LocalPlayer | null;
+
+  // Remote players (interpolated)
+  remotePlayers: Map<string, RemotePlayer>;
+
+  // NPCs (server-authoritative, interpolated)
+  npcs: Map<string, NPC>;
+
+  // Congress
+  congress: CongressState;
+
+  // Last server tick seq
+  lastTickSeq: number;
+  lastTickTime: number;
+
+  // Current chunk map (tile grid ROWS×COLS)
+  // Index [row][col], values: 0=grass 1=path 2=water 3=building 4=tree 5=rock 6=fountain
+  map: Uint8Array[] | null;
+  mapChunkX: number;
+  mapChunkY: number;
+
+  // Frame counter (incremented each rAF)
+  frame: number;
+
+  // Player name from /api/me (resolved async)
+  playerName: string;
+  playerColor: string;
+}
+
+export const TILE = 20;
+export const CANVAS_W = 1000;
+export const CANVAS_H = 700;
+export const COLS = Math.floor(CANVAS_W / TILE); // 50
+export const ROWS = Math.floor(CANVAS_H / TILE); // 35
+
+export const PLAYER_SPEED = 1.8; // px/frame
+
+export const INTERPOLATION_DELAY_MS = 100;
+export const SNAPSHOT_BUFFER_SIZE = 8;
+export const PENDING_INPUT_CAP = 120;
+
+// Blocking tile types (cannot walk through)
+export const BLOCKING_TILES = new Set([2, 3, 4, 5, 6]);
+
+function randomColor(): string {
+  const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#e91e63"];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function adjAnimalName(): string {
+  const adjs = ["swift", "bold", "calm", "deft", "keen", "lithe", "nimble", "quick"];
+  const animals = ["fox", "owl", "deer", "lynx", "crow", "hare", "hawk", "wolf"];
+  return adjs[Math.floor(Math.random() * adjs.length)] + "-" + animals[Math.floor(Math.random() * animals.length)];
+}
+
+export function createWorldState(): WorldState {
+  return {
+    connected: false,
+    socketId: null,
+    localPlayer: null,
+    remotePlayers: new Map(),
+    npcs: new Map(),
+    congress: { active: false },
+    lastTickSeq: 0,
+    lastTickTime: 0,
+    map: null,
+    mapChunkX: 0,
+    mapChunkY: 0,
+    frame: 0,
+    playerName: adjAnimalName(),
+    playerColor: randomColor(),
+  };
+}

@@ -1,0 +1,8 @@
+{
+  "name": "commons-v2",
+  "title": "Commons V2",
+  "description": "TypeScript rewrite of The Commons — modular client connecting to commons-server",
+  "port": 8107,
+  "status": "active",
+  "rationale": "Phase 3 of the Commons Architecture Rebuild Spec: replace 2965-line monolith (grazing.html) with ES modules. Renderer is a pure function, state mutations isolated to network.ts and local-player.ts, snapshot interpolation for remote entities, client-side prediction with server reconciliation."
+}
