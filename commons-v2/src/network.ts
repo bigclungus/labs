@@ -72,22 +72,29 @@ function handleWelcome(msg: any): void {
 }
 
 // Offset to convert server wall-clock timestamps (Date.now() ms) to client
-// performance.now() ms. Calibrated once on the first tick received.
-let serverTimeOffset: number | null = null;
+// performance.now() ms. Continuously calibrated via EMA over 8 ticks to
+// smooth out jitter without locking in a stale first-sample estimate.
+const EMA_ALPHA = 0.1;
+const EMA_WARMUP = 8;
+let serverTimeOffsetEMA: number | null = null;
+let serverTimeOffsetSamples = 0;
 
 function serverTsToClientTs(serverTs: number): number {
-  if (serverTimeOffset === null) {
-    // Calibrate: server sent this tick at serverTs wall-clock time.
-    // At the moment we receive it, performance.now() ~ clientNow.
-    serverTimeOffset = performance.now() - serverTs;
+  const sample = performance.now() - serverTs;
+  if (serverTimeOffsetEMA === null) {
+    serverTimeOffsetEMA = sample;
+  } else {
+    serverTimeOffsetEMA = EMA_ALPHA * sample + (1 - EMA_ALPHA) * serverTimeOffsetEMA;
   }
-  return serverTs + serverTimeOffset;
+  serverTimeOffsetSamples++;
+  return serverTs + serverTimeOffsetEMA;
 }
 
 function handleTick(msg: any): void {
   const now = performance.now();
   state.lastTickSeq = msg.seq ?? 0;
   state.lastTickTime = now;
+  state.serverTime = msg.serverTime ?? msg.t ?? Date.now();
 
   // Update remote players
   if (msg.players) {

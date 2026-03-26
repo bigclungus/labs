@@ -25,8 +25,9 @@ function withAlpha(hex: string, alpha: number): string {
 
 // -- Night tint -------------------------------------------------------------
 
-function getNightTint(): string | null {
-  const hour = new Date().getHours();
+function getNightTint(serverTime: number): string | null {
+  // Use server-authoritative time so all clients see the same day/night cycle.
+  const hour = new Date(serverTime).getUTCHours();
   if (hour >= 6 && hour < 18) return null;
   if (hour >= 18 && hour < 21) return "rgba(180,120,0,0.12)";
   if (hour >= 21 || hour < 0) return "rgba(0,0,60,0.20)";
@@ -200,15 +201,19 @@ export function render(state: WorldState, ctx: CanvasRenderingContext2D, frame: 
   ctx.fillStyle = "#3a5a2a";
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
+  // Use server-authoritative time for all time-of-day and season calculations.
+  // Fall back to Date.now() only before the first tick arrives (serverTime === 0).
+  const refTime = state.serverTime > 0 ? state.serverTime : Date.now();
+
   // Tile map from cache
   if (state.map) {
-    const season = getSeason();
+    const season = getSeason(refTime);
     const tileCanvas = getOrBuildTileCache(state.map, state.mapChunkX, state.mapChunkY, season);
     ctx.drawImage(tileCanvas, 0, 0);
   }
 
   // Night tint overlay
-  const tint = getNightTint();
+  const tint = getNightTint(refTime);
   if (tint) {
     ctx.fillStyle = tint;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);

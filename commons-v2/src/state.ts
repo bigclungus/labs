@@ -101,6 +101,10 @@ export interface WorldState {
   lastTickSeq: number;
   lastTickTime: number;
 
+  // Server-authoritative wall-clock time (ms since epoch) from last tick.
+  // Use this instead of Date.now() for day/night and season calculations.
+  serverTime: number;
+
   // Current chunk map (tile grid ROWS×COLS)
   // Index [row][col], values: 0=grass 1=path 2=water 3=building 4=tree 5=rock 6=fountain
   map: Uint8Array[] | null;
@@ -151,6 +155,7 @@ export function createWorldState(): WorldState {
     congress: { active: false },
     lastTickSeq: 0,
     lastTickTime: 0,
+    serverTime: 0,
     map: null,
     mapChunkX: 0,
     mapChunkY: 0,

@@ -25,8 +25,10 @@ export interface TileColors {
   fountainWater: string;
 }
 
-export function getSeason(): Season {
-  const week = Math.floor(Date.now() / (1000 * 60 * 60 * 24 * 7));
+export function getSeason(serverTime?: number): Season {
+  // Use server-authoritative time when available so all clients agree on the season.
+  const ts = serverTime != null && serverTime > 0 ? serverTime : Date.now();
+  const week = Math.floor(ts / (1000 * 60 * 60 * 24 * 7));
   const idx = week % 4;
   return (["spring", "summer", "autumn", "winter"] as Season[])[idx];
 }
