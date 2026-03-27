@@ -83,6 +83,34 @@ export interface CongressState {
   debaters?: string[];
 }
 
+export interface WarthogState {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  facing: Facing;
+  seats: (string | null)[]; // socketIds, length 4
+}
+
+export interface AuditionWalker {
+  id: string;
+  name: string;
+  title: string;
+  traits: string[];
+  description: string;
+  x: number;
+  speed: number;
+  paused: boolean;
+  created_at: number;
+  avatar_color: string;
+}
+
+export interface WornPathTile {
+  tileX: number;
+  tileY: number;
+  visitCount: number;
+}
+
 export interface WorldState {
   // Connection
   connected: boolean;
@@ -99,6 +127,18 @@ export interface WorldState {
 
   // Congress
   congress: CongressState;
+
+  // Warthog vehicle (server-authoritative)
+  warthog: WarthogState | null;
+
+  // Audition walkers (polled from audition service)
+  walkers: AuditionWalker[];
+
+  // Worn path tiles for current chunk (polled from server)
+  wornPaths: Map<string, number>; // key: "tileX,tileY", value: visitCount
+
+  // Whether the local player is seated in the warthog
+  seatedInWarthog: boolean;
 
   // Last server tick seq
   lastTickSeq: number;
@@ -160,6 +200,10 @@ export function createWorldState(): WorldState {
     remotePlayers: new Map(),
     npcs: new Map(),
     congress: { active: false },
+    warthog: null,
+    walkers: [],
+    wornPaths: new Map(),
+    seatedInWarthog: false,
     lastTickSeq: 0,
     lastTickTime: 0,
     serverTime: 0,

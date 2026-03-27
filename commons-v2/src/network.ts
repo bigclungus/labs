@@ -2,7 +2,7 @@
 // Applies tick messages to WorldState. Mutates state.
 
 import {
-  WorldState, RemotePlayer, NPC, Facing,
+  WorldState, RemotePlayer, NPC, Facing, WarthogState,
   SNAPSHOT_BUFFER_SIZE,
 } from "./state.ts";
 import { initLocalPlayer, reconcile } from "./entities/local-player.ts";
@@ -51,6 +51,16 @@ export function sendStatus(away: boolean): void {
 export function sendChunk(chunkX: number, chunkY: number): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify({ type: "chunk", chunkX, chunkY }));
+}
+
+export function sendWarthog(type: string, payload?: Record<string, unknown>): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type, ...payload }));
+}
+
+export function sendWornPath(chunkX: number, chunkY: number, tileX: number, tileY: number): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: "worn_path", chunkX, chunkY, tileX, tileY }));
 }
 
 // -- Message handling -------------------------------------------------------
@@ -218,6 +228,11 @@ function handleTick(msg: any): void {
   // Congress state
   if (msg.congress) {
     state.congress = msg.congress;
+  }
+
+  // Warthog state (delta: only sent when changed)
+  if (msg.warthog) {
+    state.warthog = msg.warthog as WarthogState;
   }
 }
 

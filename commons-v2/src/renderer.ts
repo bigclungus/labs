@@ -2,8 +2,12 @@
 // This module has zero side effects. It only reads state and draws to the passed-in ctx.
 
 import { WorldState, LocalPlayer, RemotePlayer, NPC, Facing, TILE, CANVAS_W, CANVAS_H } from "./state.ts";
-import { getOrBuildTileCache, getSeason } from "./map/renderer.ts";
+import { getOrBuildTileCache, getSeason, getTileColors } from "./map/renderer.ts";
 import { getWinner, getSpriteId, NPC_DISPLAY_NAMES } from "./sprites.ts";
+import { drawWarthog } from "./entities/warthog.ts";
+import { drawWalkers } from "./entities/walker.ts";
+import { drawWornPaths } from "./map/worn-paths.ts";
+import { drawFountainAnimation } from "./map/fountain-anim.ts";
 
 const HOP_FRAMES = 12;
 const PLAYER_SIZE = 12;
@@ -319,10 +323,19 @@ export function render(state: WorldState, ctx: CanvasRenderingContext2D, frame: 
   const refTime = state.serverTime > 0 ? state.serverTime : Date.now();
 
   // Tile map from cache
+  const season = getSeason(refTime);
   if (state.map) {
-    const season = getSeason(refTime);
     const tileCanvas = getOrBuildTileCache(state.map, state.mapChunkX, state.mapChunkY, season);
     ctx.drawImage(tileCanvas, 0, 0);
+  }
+
+  // Worn path overlay (drawn on top of tile cache, below entities)
+  drawWornPaths(ctx, state.map);
+
+  // Fountain animation overlay (above tile cache, below entities)
+  if (state.map) {
+    const tileColors = getTileColors(season);
+    drawFountainAnimation(ctx, state.map, frame, tileColors.fountainWater);
   }
 
   // Night tint overlay
@@ -347,6 +360,12 @@ export function render(state: WorldState, ctx: CanvasRenderingContext2D, frame: 
   for (const npc of state.npcs.values()) {
     drawNPC(ctx, npc, frame, renderNow, state.mouseX, state.mouseY);
   }
+
+  // Audition walkers (cross at row 18 — drawn before local player)
+  drawWalkers(ctx, state.walkers);
+
+  // Warthog vehicle (drawn below local player so player appears inside)
+  drawWarthog(ctx, state);
 
   // Local player (drawn on top)
   if (state.localPlayer) {
