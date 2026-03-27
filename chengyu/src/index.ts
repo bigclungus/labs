@@ -18,6 +18,60 @@ db.run(`CREATE TABLE IF NOT EXISTS chengyu (
 )`);
 db.run(`CREATE INDEX IF NOT EXISTS idx_word ON chengyu(word)`);
 
+// Migration: add translation columns
+try { db.run(`ALTER TABLE chengyu ADD COLUMN translation_literal TEXT DEFAULT ''`); } catch {}
+try { db.run(`ALTER TABLE chengyu ADD COLUMN translation_explanation TEXT DEFAULT ''`); } catch {}
+
+// Load OpenAI key for on-demand translation
+const OPENAI_API_KEY = (() => {
+  try {
+    const env = require("fs").readFileSync("/mnt/data/temporal-workflows/.env", "utf-8");
+    const match = env.match(/^OPENAI_API_KEY=(.+)$/m);
+    return match?.[1]?.trim() ?? "";
+  } catch { return ""; }
+})();
+
+async function translateChengyu(word: string, explanation: string): Promise<{ literal: string; explanationEn: string }> {
+  if (!OPENAI_API_KEY) throw new Error("No OpenAI API key configured");
+
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0.3,
+      messages: [
+        {
+          role: "system",
+          content: "You translate Chinese chengyu (four-character idioms). Reply ONLY with valid JSON, no markdown."
+        },
+        {
+          role: "user",
+          content: `Translate this chengyu. Return JSON: {"literal": "<literal word-by-word meaning in English>", "explanation": "<English translation of the explanation>"}
+
+Chengyu: ${word}
+Chinese explanation: ${explanation}`
+        }
+      ]
+    }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`OpenAI API error ${resp.status}: ${text}`);
+  }
+
+  const data = await resp.json() as { choices: { message: { content: string } }[] };
+  const content = data.choices[0]?.message?.content?.trim() ?? "";
+  // Strip markdown code fences if present
+  const cleaned = content.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+  const parsed = JSON.parse(cleaned);
+  return { literal: parsed.literal ?? "", explanationEn: parsed.explanation ?? "" };
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -30,10 +84,24 @@ function noExample(s: string): boolean {
   return !s || s.trim() === "无" || s.trim() === "";
 }
 
+function wiktionaryLinks(word: string): string {
+  const fullUrl = `https://en.wiktionary.org/wiki/${encodeURIComponent(word)}`;
+  const chars = [...word].filter(c => c.trim());
+  const charLinks = chars.map(c =>
+    `<a href="https://en.wiktionary.org/wiki/${encodeURIComponent(c)}" class="wikt-char" target="_blank" rel="noopener">${escapeHtml(c)}</a>`
+  ).join("");
+  return `<span class="wikt-links">
+    <a href="${fullUrl}" class="wikt-full" target="_blank" rel="noopener">Wiktionary</a>
+    <span class="wikt-chars">${charLinks}</span>
+  </span>`;
+}
+
 function entryHtml(base: string, e: {
   id: number; word: string; pinyin: string;
   explanation: string; derivation: string; example: string;
+  translation_literal?: string; translation_explanation?: string;
 }): string {
+  const hasTranslation = e.translation_literal || e.translation_explanation;
   return `
     <article class="entry">
       <div class="entry-header">
@@ -41,8 +109,12 @@ function entryHtml(base: string, e: {
           <span class="word">${escapeHtml(e.word)}</span>
         </a>
         <span class="pinyin">${escapeHtml(e.pinyin)}</span>
+        ${wiktionaryLinks(e.word)}
       </div>
+      ${hasTranslation && e.translation_literal ? `<p class="translation"><span class="label">Literal</span>${escapeHtml(e.translation_literal)}</p>` : ""}
       <p class="explanation">${escapeHtml(e.explanation)}</p>
+      ${hasTranslation && e.translation_explanation ? `<p class="translation-en"><span class="label">English</span>${escapeHtml(e.translation_explanation)}</p>` : ""}
+      ${!hasTranslation ? `<p class="translate-prompt"><a href="${base}/translate/${encodeURIComponent(e.word)}" class="translate-btn">Translate to English</a></p>` : ""}
       ${!noExample(e.derivation) ? `<p class="derivation"><span class="label">来源</span>${escapeHtml(e.derivation)}</p>` : ""}
       ${!noExample(e.example) ? `<p class="example"><span class="label">例句</span>${escapeHtml(e.example)}</p>` : ""}
     </article>`;
@@ -90,11 +162,11 @@ function pageHtml(base: string, title: string, content: string): string {
       margin-bottom: 16px; background: #141414;
     }
     .entry:hover { border-color: #383838; }
-    .entry-header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; }
+    .entry-header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
     .word-link { text-decoration: none; }
     .word { font-size: 1.9rem; color: #d4a843; letter-spacing: .12em; }
     .word-link:hover .word { color: #e8bc55; }
-    .pinyin { font-size: .9rem; color: #8eb8d8; font-family: monospace; }
+    .pinyin { font-size: .95rem; color: #8eb8d8; font-family: "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif; letter-spacing: .03em; }
     .explanation { font-size: .95rem; line-height: 1.65; color: #d8d5cf; }
     .derivation, .example {
       font-size: .82rem; line-height: 1.6; color: #999; margin-top: 8px;
@@ -118,7 +190,7 @@ function pageHtml(base: string, title: string, content: string): string {
     }
     .random-btn:hover { border-color: #d4a843; color: #d4a843; }
     .detail-word { font-size: 3.5rem; color: #d4a843; letter-spacing: .2em; display: block; margin-bottom: 6px; }
-    .detail-pinyin { font-size: 1.1rem; color: #8eb8d8; font-family: monospace; }
+    .detail-pinyin { font-size: 1.1rem; color: #8eb8d8; font-family: "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif; letter-spacing: .03em; }
     .detail-section { margin-top: 20px; }
     .detail-section h3 { font-size: .75rem; color: #666; font-family: monospace; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
     .detail-section p { font-size: 1rem; line-height: 1.7; color: #d8d5cf; }
@@ -126,6 +198,28 @@ function pageHtml(base: string, title: string, content: string): string {
     .back:hover { color: #d4a843; }
     .count-info { font-family: monospace; font-size: .8rem; color: #555; margin-bottom: 20px; }
     .no-results { color: #666; font-family: monospace; padding: 40px 0; }
+    .wikt-links { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: .75rem; }
+    .wikt-full {
+      color: #7a9b6d; text-decoration: none; font-family: monospace;
+      border: 1px solid #2a3a25; border-radius: 3px; padding: 1px 6px;
+    }
+    .wikt-full:hover { color: #a4cc91; border-color: #4a6a3f; }
+    .wikt-chars { display: inline-flex; gap: 2px; }
+    .wikt-char {
+      color: #8a8a6a; text-decoration: none; font-size: .85rem;
+      border: 1px solid #2a2a22; border-radius: 3px; padding: 0 4px;
+    }
+    .wikt-char:hover { color: #d4a843; border-color: #4a4a32; }
+    .translation, .translation-en {
+      font-size: .88rem; line-height: 1.5; color: #b0c8a0; margin-top: 4px;
+    }
+    .translation-en { color: #a0b8c8; }
+    .translate-prompt { margin-top: 6px; }
+    .translate-btn {
+      font-size: .75rem; color: #888; text-decoration: none; font-family: monospace;
+      border: 1px dashed #333; border-radius: 4px; padding: 2px 8px;
+    }
+    .translate-btn:hover { color: #d4a843; border-color: #d4a843; }
   </style>
 </head>
 <body>
@@ -152,7 +246,7 @@ function homePage(base: string): Response {
   const total = (db.query("SELECT COUNT(*) as c FROM chengyu").get() as { c: number }).c;
   const featured = db.query(
     "SELECT * FROM chengyu ORDER BY RANDOM() LIMIT 5"
-  ).all() as { id: number; word: string; pinyin: string; explanation: string; derivation: string; example: string }[];
+  ).all() as { id: number; word: string; pinyin: string; explanation: string; derivation: string; example: string; translation_literal: string; translation_explanation: string }[];
 
   const content = `
     <h1>${total.toLocaleString()} chengyu in the database</h1>
@@ -180,7 +274,7 @@ function searchPage(base: string, query: string, page: number): Response {
   const results = db.query(
     `SELECT * FROM chengyu WHERE word LIKE ? OR pinyin LIKE ? OR explanation LIKE ? OR derivation LIKE ?
      LIMIT ? OFFSET ?`
-  ).all(q, q, q, q, PAGE_SIZE, offset) as { id: number; word: string; pinyin: string; explanation: string; derivation: string; example: string }[];
+  ).all(q, q, q, q, PAGE_SIZE, offset) as { id: number; word: string; pinyin: string; explanation: string; derivation: string; example: string; translation_literal: string; translation_explanation: string }[];
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -215,6 +309,7 @@ function searchPage(base: string, query: string, page: number): Response {
 function wordPage(base: string, word: string): Response {
   const e = db.query("SELECT * FROM chengyu WHERE word = ? LIMIT 1").get(word) as {
     id: number; word: string; pinyin: string; explanation: string; derivation: string; example: string;
+    translation_literal: string; translation_explanation: string;
   } | null;
 
   if (!e) {
@@ -224,16 +319,33 @@ function wordPage(base: string, word: string): Response {
     );
   }
 
+  const hasTranslation = e.translation_literal || e.translation_explanation;
+
   const content = `
     <a href="javascript:history.back()" class="back">← back</a>
     <div>
       <span class="detail-word">${escapeHtml(e.word)}</span>
       <span class="detail-pinyin">${escapeHtml(e.pinyin)}</span>
     </div>
+    <div style="margin: 12px 0">${wiktionaryLinks(e.word)}</div>
+    ${hasTranslation && e.translation_literal ? `
+    <div class="detail-section">
+      <h3>Literal Meaning</h3>
+      <p class="translation">${escapeHtml(e.translation_literal)}</p>
+    </div>` : ""}
     <div class="detail-section">
       <h3>Meaning</h3>
       <p>${escapeHtml(e.explanation)}</p>
     </div>
+    ${hasTranslation && e.translation_explanation ? `
+    <div class="detail-section">
+      <h3>English Translation</h3>
+      <p class="translation-en">${escapeHtml(e.translation_explanation)}</p>
+    </div>` : ""}
+    ${!hasTranslation ? `
+    <div class="detail-section">
+      <a href="${base}/translate/${encodeURIComponent(e.word)}" class="translate-btn" style="font-size:.85rem;padding:6px 14px">Translate to English</a>
+    </div>` : ""}
     ${!noExample(e.derivation) ? `
     <div class="detail-section">
       <h3>Origin / Etymology (来源)</h3>
@@ -256,9 +368,38 @@ function randomRedirect(base: string): Response {
   return Response.redirect(`${base}/word/${encodeURIComponent(e.word)}`, 302);
 }
 
+async function handleTranslate(base: string, word: string): Promise<Response> {
+  const e = db.query("SELECT id, word, explanation, translation_literal, translation_explanation FROM chengyu WHERE word = ? LIMIT 1").get(word) as {
+    id: number; word: string; explanation: string; translation_literal: string; translation_explanation: string;
+  } | null;
+
+  if (!e) {
+    return Response.redirect(`${base}/`, 302);
+  }
+
+  // Already translated? Just redirect.
+  if (e.translation_literal && e.translation_explanation) {
+    return Response.redirect(`${base}/word/${encodeURIComponent(word)}`, 302);
+  }
+
+  try {
+    const result = await translateChengyu(e.word, e.explanation);
+    db.run(
+      `UPDATE chengyu SET translation_literal = ?, translation_explanation = ? WHERE id = ?`,
+      result.literal, result.explanationEn, e.id
+    );
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Translation failed for ${word}: ${msg}`);
+    // Redirect back even on failure; they just won't see translation
+  }
+
+  return Response.redirect(`${base}/word/${encodeURIComponent(word)}`, 302);
+}
+
 const server = Bun.serve({
   port: PORT,
-  fetch(req) {
+  async fetch(req) {
     const url = new URL(req.url);
     const base = req.headers.get("X-Lab-Base-Path") ?? "";
     const path = url.pathname.replace(base, "") || "/";
@@ -270,6 +411,8 @@ const server = Bun.serve({
       const p = Math.max(1, parseInt(url.searchParams.get("p") ?? "1", 10));
       return searchPage(base, q, p);
     }
+    const translateMatch = path.match(/^\/translate\/(.+)$/);
+    if (translateMatch) return handleTranslate(base, decodeURIComponent(translateMatch[1]));
     const wordMatch = path.match(/^\/word\/(.+)$/);
     if (wordMatch) return wordPage(base, decodeURIComponent(wordMatch[1]));
 
