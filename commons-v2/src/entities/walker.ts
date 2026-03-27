@@ -1,11 +1,13 @@
 // entities/walker.ts — Audition walker rendering and interaction
 //
-// Polls /api/audition/walkers every 2s.
+// Polls /api/audition/walkers every 2s via setInterval (owned here — not driven
+// by the per-frame game loop).
 // Walkers cross at canvas row 18 (y = 18*TILE + TILE/2 = 370).
 // Hover pauses the walker and shows a concept card.
 // Keep/dismiss buttons send to /api/audition/keep and /api/audition/dismiss.
 
 import { WorldState, AuditionWalker, TILE } from "../state.ts";
+import { lightenHex } from "../utils/color.ts";
 
 // Walker Y position — row 18 center (the horizontal path area)
 const WALKER_Y = 18 * TILE + TILE / 2;
@@ -15,17 +17,13 @@ const WALKER_HIT_W = 10;
 const WALKER_HIT_H = 18;
 
 // ── Polling ──────────────────────────────────────────────────────────────────
+// Polling is owned here via setInterval — the game loop does NOT call pollWalkers
+// per frame. This keeps scheduling in one place.
 
-let lastFetchAt = 0;
-const FETCH_INTERVAL_MS = 2000;
 // Audition service URL — proxied via clunger at /api/audition/*
 const AUDITION_BASE = "";
 
-export function pollWalkers(state: WorldState): void {
-  const now = Date.now();
-  if (now - lastFetchAt < FETCH_INTERVAL_MS) return;
-  lastFetchAt = now;
-
+function pollWalkers(state: WorldState): void {
   fetch(`${AUDITION_BASE}/api/audition/walkers`)
     .then((r) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -39,7 +37,17 @@ export function pollWalkers(state: WorldState): void {
     });
 }
 
+let _pollingInterval: ReturnType<typeof setInterval> | null = null;
+
+/** Call once at startup to begin the 2s polling loop. */
+export function initWalkerPolling(state: WorldState): void {
+  if (_pollingInterval !== null) return; // guard against double-init
+  pollWalkers(state); // immediate first fetch
+  _pollingInterval = setInterval(() => pollWalkers(state), 2000);
+}
+
 // ── Concept card UI ──────────────────────────────────────────────────────────
+// Module-level DOM references — cleaned up by teardownWalkers().
 
 let cardEl: HTMLDivElement | null = null;
 let cardWalkerId: string | null = null;
@@ -160,6 +168,23 @@ function resumeWalker(id: string): void {
     .catch((err: Error) => console.error("[walkers] resume failed:", err.message));
 }
 
+// ── Teardown ──────────────────────────────────────────────────────────────────
+
+/**
+ * Remove the audition card from DOM and clear all module references.
+ * Call on reconnect or when leaving the page to avoid orphaned DOM nodes.
+ */
+export function teardownWalkers(): void {
+  if (cardEl) {
+    cardEl.remove();
+    cardEl = null;
+  }
+  cardWalkerId = null;
+  _hoveredId = null;
+  _mouseCanvasX = -1;
+  _mouseCanvasY = -1;
+}
+
 // ── Hover tracking (updated from main.ts canvas mousemove) ───────────────────
 
 let _hoveredId: string | null = null;
@@ -256,7 +281,7 @@ export function drawWalkers(
 
     // Head (slightly lighter)
     ctx.globalAlpha = 1;
-    ctx.fillStyle = lightenColor(color, 30);
+    ctx.fillStyle = lightenHex(color, 30);
     ctx.fillRect(wx - 3, wy - 6, 6, 6);
 
     // Eyes
@@ -301,13 +326,4 @@ export function drawWalkers(
       ctx.restore();
     }
   }
-}
-
-function lightenColor(hex: string, amount: number): string {
-  const h = hex.replace("#", "");
-  const num = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h, 16);
-  const r = Math.min(255, ((num >> 16) & 0xff) + amount);
-  const g = Math.min(255, ((num >> 8) & 0xff) + amount);
-  const b = Math.min(255, (num & 0xff) + amount);
-  return `rgb(${r},${g},${b})`;
 }

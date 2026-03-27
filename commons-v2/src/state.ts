@@ -1,6 +1,7 @@
 // state.ts — WorldState type definitions and mutable singleton
-// Only network.ts and local-player.ts may mutate this state.
+// Only network.ts and local-player.ts may mutate this state directly.
 // renderer.ts and all other modules read only.
+// Exception: warthog.ts mutates state.seatedInWarthog (server-confirmed seat truth).
 
 export type Facing = "left" | "right";
 
@@ -92,6 +93,15 @@ export interface WarthogState {
   seats: (string | null)[]; // socketIds, length 4
 }
 
+// Drive input state lives in WorldState so it's not module-level mutable in warthog.ts.
+export interface WarthogDriveInput {
+  left: boolean;
+  right: boolean;
+  up: boolean;
+  down: boolean;
+  ePressedOnce: boolean; // one-shot flag, consumed by tickWarthog each frame
+}
+
 export interface AuditionWalker {
   id: string;
   name: string;
@@ -103,12 +113,6 @@ export interface AuditionWalker {
   paused: boolean;
   created_at: number;
   avatar_color: string;
-}
-
-export interface WornPathTile {
-  tileX: number;
-  tileY: number;
-  visitCount: number;
 }
 
 export interface WorldState {
@@ -134,11 +138,11 @@ export interface WorldState {
   // Audition walkers (polled from audition service)
   walkers: AuditionWalker[];
 
-  // Worn path tiles for current chunk (polled from server)
-  wornPaths: Map<string, number>; // key: "tileX,tileY", value: visitCount
-
   // Whether the local player is seated in the warthog
   seatedInWarthog: boolean;
+
+  // Drive key state (owned here so warthog.ts has no module-level mutable state)
+  warthogDrive: WarthogDriveInput;
 
   // Last server tick seq
   lastTickSeq: number;
@@ -172,7 +176,16 @@ export const CANVAS_H = 700;
 export const COLS = Math.floor(CANVAS_W / TILE); // 50
 export const ROWS = Math.floor(CANVAS_H / TILE); // 35
 
-export const PLAYER_SPEED = 1.8; // px/frame
+export const PLAYER_SPEED = 108; // px/second (1.8 px/frame × 60 fps)
+
+// NPC hit radius — shared between main.ts (drag/click) and renderer.ts (hover detection)
+export const NPC_HIT_RADIUS = 14;
+
+// Congress building tile location in chunk (0,0).
+// Used by congress-modal.ts (doorway detection) and renderer.ts (label + flag).
+// Update if the chunk map layout changes.
+export const CONGRESS_BUILDING_COL = 5;  // tile column of the building
+export const CONGRESS_BUILDING_LABEL_ROW = 2; // tile row of the name label above the door
 
 export const INTERPOLATION_DELAY_MS = 100;
 export const SNAPSHOT_BUFFER_SIZE = 8;
@@ -202,8 +215,8 @@ export function createWorldState(): WorldState {
     congress: { active: false },
     warthog: null,
     walkers: [],
-    wornPaths: new Map(),
     seatedInWarthog: false,
+    warthogDrive: { left: false, right: false, up: false, down: false, ePressedOnce: false },
     lastTickSeq: 0,
     lastTickTime: 0,
     serverTime: 0,

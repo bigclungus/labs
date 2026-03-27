@@ -1,9 +1,9 @@
 // map/worn-paths.ts — Worn path tile tracking and rendering
 //
-// Worn paths are tracked client-side in localStorage (matching V1 behavior).
-// The server also receives updates via worn_path WS messages and writes them to SQLite,
-// but the server never sends worn path data back to clients — so each client
-// maintains its own local view of worn tiles.
+// Worn paths are tracked client-side in localStorage.
+// main.ts also sends a worn_path WS message to the server on each tile visit;
+// the server writes these to SQLite for analytics but does NOT broadcast them
+// back to clients — each client maintains its own independent local view.
 //
 // Visit thresholds (matching V1):
 //   >= 10 visits → "worn" (slight dark overlay)
@@ -40,11 +40,23 @@ function saveStore(): void {
   }
 }
 
+// Save on tab hide / page unload so we don't lose the last <30 visits
+if (typeof window !== "undefined") {
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveStore();
+  });
+  window.addEventListener("beforeunload", () => {
+    saveStore();
+  });
+}
+
 // Called by main.ts when the local player moves
 export function recordTileVisit(tileX: number, tileY: number): void {
   const key = `${tileX},${tileY}`;
   store.counts[key] = (store.counts[key] ?? 0) + 1;
-  // Persist every 30 visits to avoid thrashing localStorage
+  // Persist every 30 visits to avoid thrashing localStorage.
+  // The visibilitychange/beforeunload handlers above ensure the remainder
+  // is flushed when the tab closes.
   if (store.counts[key] % 30 === 0) {
     saveStore();
   }

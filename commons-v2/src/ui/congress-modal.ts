@@ -6,7 +6,13 @@
 // Shows: "The congress chamber awaits" + link to /congress
 // Trigger is detected each frame in main.ts (tickCongressModal).
 
-import { WorldState, TILE } from "../state.ts";
+import { WorldState, TILE, CONGRESS_BUILDING_COL } from "../state.ts";
+
+// Congress building doorway rows — chunk (0,0), rows 5–7.
+// The column is shared with renderer.ts via CONGRESS_BUILDING_COL in state.ts.
+// Update if the chunk map layout changes.
+const CONGRESS_BUILDING_ROW_MIN = 5;
+const CONGRESS_BUILDING_ROW_MAX = 7;
 
 let _open = false;
 let _lastTriggerTile = ""; // suppress repeated triggers from the same tile
@@ -155,7 +161,8 @@ export function tickCongressModal(state: WorldState): void {
   const tileX = Math.floor(player.x / TILE);
   const tileY = Math.floor(player.y / TILE);
 
-  const inDoorway = tileX === 5 && (tileY === 5 || tileY === 6 || tileY === 7);
+  const inDoorway = tileX === CONGRESS_BUILDING_COL &&
+    tileY >= CONGRESS_BUILDING_ROW_MIN && tileY <= CONGRESS_BUILDING_ROW_MAX;
 
   if (inDoorway) {
     const key = `${tileX},${tileY}`;

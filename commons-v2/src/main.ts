@@ -5,10 +5,11 @@ import { createWorldState, TILE } from "./state.ts";
 import { initInput, getInput, getLastInputAt } from "./input.ts";
 import { initNetwork, sendMove, sendHop, sendChunk, sendStatus, sendWarthog, sendWornPath } from "./network.ts";
 import { tickLocalPlayer } from "./entities/local-player.ts";
+import { NPC_HIT_RADIUS } from "./state.ts";
 import { tickRemotePlayers } from "./entities/remote-player.ts";
 import { tickNPCs } from "./entities/npc.ts";
-import { tickWarthog, initWarthogInput, setWarthogSendFn } from "./entities/warthog.ts";
-import { pollWalkers, updateWalkerHover, handleWalkerClick, closeWalkerCardIfOpen } from "./entities/walker.ts";
+import { tickWarthog, initWarthogInput } from "./entities/warthog.ts";
+import { initWalkerPolling, updateWalkerHover, handleWalkerClick, closeWalkerCardIfOpen } from "./entities/walker.ts";
 import { getChunk } from "./map/chunk.ts";
 import { invalidateTileCache } from "./map/renderer.ts";
 import { recordTileVisit } from "./map/worn-paths.ts";
@@ -27,8 +28,8 @@ const state = createWorldState();
 initInput();
 initChatModal();
 initCongressModal();
-initWarthogInput();
-setWarthogSendFn((type, payload) => sendWarthog(type, payload));
+initWarthogInput(state);
+initWalkerPolling(state);
 
 // -- NPC drag-and-drop state ------------------------------------------------
 // Short click → open chat modal.  Hold > DRAG_THRESHOLD_MS → drag NPC.
@@ -36,7 +37,7 @@ setWarthogSendFn((type, payload) => sendWarthog(type, payload));
 // the next tick. Full server-side NPC dragging is not implemented.)
 
 const DRAG_THRESHOLD_MS = 250;
-const NPC_HIT_RADIUS = 14;
+// NPC_HIT_RADIUS is imported from state.ts (shared with renderer.ts)
 
 let mousedownAt = 0;
 let mousedownNPC: string | null = null;
@@ -167,8 +168,9 @@ let lastWornTileY = -1;
 // Throttle WS worn_path messages (send at most once per tile visit, not every frame)
 
 function loop(now: number): void {
-  const _dt = now - lastFrameTime;
+  const dtMs = now - lastFrameTime;
   lastFrameTime = now;
+  const dt = dtMs / 1000; // convert to seconds for frame-rate-independent movement
   state.frame++;
 
   const input = getInput();
@@ -176,7 +178,7 @@ function loop(now: number): void {
   // Tick local player (suppress movement when seated in warthog — server controls position)
   const { dx, dy, chunkChanged, moved } = state.seatedInWarthog
     ? { dx: 0, dy: 0, chunkChanged: false, moved: false }
-    : tickLocalPlayer(state, input);
+    : tickLocalPlayer(state, input, dt);
 
   // Send movement to server at most 20Hz (50ms intervals) to avoid flooding server
   if (moved && state.localPlayer && state.localPlayer.inputSeq !== lastMoveSeq) {
@@ -219,10 +221,7 @@ function loop(now: number): void {
   tickNPCs(state.npcs, now);
 
   // Warthog tick (E-key join/leave, WASD driving)
-  tickWarthog(state);
-
-  // Poll audition walkers (rate-limited internally)
-  pollWalkers(state);
+  tickWarthog(state, (type, payload) => sendWarthog(type, payload));
 
   // Congress building entry check
   tickCongressModal(state);

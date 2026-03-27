@@ -68,17 +68,22 @@ export function applyMovement(player: LocalPlayer, dx: number, dy: number, map: 
   // Blocked in both — no move
 }
 
-export function tickLocalPlayer(state: WorldState, input: Readonly<InputState>): {
+export function tickLocalPlayer(state: WorldState, input: Readonly<InputState>, dt: number): {
   dx: number; dy: number; chunkChanged: boolean; moved: boolean;
 } {
   const player = state.localPlayer;
   if (!player || !state.map) return { dx: 0, dy: 0, chunkChanged: false, moved: false };
 
+  // dt is seconds per frame. PLAYER_SPEED is px/second — multiply to get px this frame.
+  // Clamp dt to 100ms (0.1s) to prevent huge jumps after tab-unfocus or missed frames.
+  const dtClamped = Math.min(dt, 0.1);
+  const speed = PLAYER_SPEED * dtClamped;
+
   let dx = 0, dy = 0;
-  if (input.left)  dx -= PLAYER_SPEED;
-  if (input.right) dx += PLAYER_SPEED;
-  if (input.up)    dy -= PLAYER_SPEED;
-  if (input.down)  dy += PLAYER_SPEED;
+  if (input.left)  dx -= speed;
+  if (input.right) dx += speed;
+  if (input.up)    dy -= speed;
+  if (input.down)  dy += speed;
 
   // Normalize diagonal
   if (dx !== 0 && dy !== 0) {

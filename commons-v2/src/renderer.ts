@@ -1,7 +1,8 @@
 // renderer.ts — Pure render(state, ctx, frame) — no mutation, no globals
 // This module has zero side effects. It only reads state and draws to the passed-in ctx.
 
-import { WorldState, LocalPlayer, RemotePlayer, NPC, Facing, TILE, CANVAS_W, CANVAS_H } from "./state.ts";
+import { WorldState, LocalPlayer, RemotePlayer, NPC, Facing, TILE, CANVAS_W, CANVAS_H, NPC_HIT_RADIUS,
+  CONGRESS_BUILDING_COL, CONGRESS_BUILDING_LABEL_ROW } from "./state.ts";
 import { getOrBuildTileCache, getSeason, getTileColors } from "./map/renderer.ts";
 import { getWinner, getSpriteId, NPC_DISPLAY_NAMES } from "./sprites.ts";
 import { drawWarthog } from "./entities/warthog.ts";
@@ -105,8 +106,7 @@ function drawPlayerLabel(
   ctx.restore();
 }
 
-// NPC hitbox half-size — must match the value in main.ts
-const NPC_HIT_RADIUS = 14;
+// NPC_HIT_RADIUS is imported from state.ts (single source of truth, shared with main.ts)
 
 // -- Speech bubble ----------------------------------------------------------
 
@@ -380,15 +380,16 @@ export function render(state: WorldState, ctx: CanvasRenderingContext2D, frame: 
     ctx.font = "bold 8px monospace";
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(0,0,0,0.4)";
-    ctx.fillText("CONGRESS", 5 * TILE + TILE / 2 + 1, 2 * TILE - 2);
+    // Label above congress building (chunk 0,0 — column CONGRESS_BUILDING_COL)
+    ctx.fillText("CONGRESS", CONGRESS_BUILDING_COL * TILE + TILE / 2 + 1, CONGRESS_BUILDING_LABEL_ROW * TILE - 2);
     ctx.fillStyle = "#c8c8e8";
-    ctx.fillText("CONGRESS", 5 * TILE + TILE / 2, 2 * TILE - 3);
+    ctx.fillText("CONGRESS", CONGRESS_BUILDING_COL * TILE + TILE / 2, CONGRESS_BUILDING_LABEL_ROW * TILE - 3);
     ctx.restore();
 
     // Congress flag when session is active
     if (state.congress.active) {
       ctx.save();
-      const fx = 5 * TILE;
+      const fx = CONGRESS_BUILDING_COL * TILE;
       const fy = TILE;
       ctx.fillStyle = "#222";
       ctx.fillRect(fx, fy, 2, TILE); // pole

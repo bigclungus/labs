@@ -3,8 +3,13 @@
 // Server is authoritative over warthog position and seats.
 // Client sends warthog_join / warthog_leave / warthog_input messages.
 // E-key toggles join/leave. WASD drives when seated as driver (seat 0).
+//
+// Mutation contract: this module writes state.seatedInWarthog and
+// state.warthogDrive (both in WorldState). All other state fields are read-only
+// from this module's perspective.
 
 import { WorldState, CANVAS_W, CANVAS_H } from "../state.ts";
+import { lightenHex } from "../utils/color.ts";
 
 const WARTHOG_W = 60;
 const WARTHOG_H = 32;
@@ -13,101 +18,78 @@ const WARTHOG_H = 32;
 const BOARD_DISTANCE = 60;
 
 // ── Key state for warthog driving ───────────────────────────────────────────
+// Drive state lives in WorldState.warthogDrive — not module-level variables —
+// so there are no hidden mutable singletons in this module.
 
-let _driveLeft  = false;
-let _driveRight = false;
-let _driveUp    = false;
-let _driveDown  = false;
-let _ePressed   = false; // one-shot — consume in tick
-
-export function initWarthogInput(): void {
+export function initWarthogInput(state: WorldState): void {
   window.addEventListener("keydown", (e: KeyboardEvent) => {
+    const d = state.warthogDrive;
     switch (e.key) {
       case "e": case "E":
-        _ePressed = true;
+        d.ePressedOnce = true;
         e.preventDefault();
         break;
-      case "ArrowLeft":  case "a": case "A": _driveLeft  = true; break;
-      case "ArrowRight": case "d": case "D": _driveRight = true; break;
-      case "ArrowUp":    case "w": case "W": _driveUp    = true; break;
-      case "ArrowDown":  case "s": case "S": _driveDown  = true; break;
+      case "ArrowLeft":  case "a": case "A": d.left  = true; break;
+      case "ArrowRight": case "d": case "D": d.right = true; break;
+      case "ArrowUp":    case "w": case "W": d.up    = true; break;
+      case "ArrowDown":  case "s": case "S": d.down  = true; break;
     }
   });
   window.addEventListener("keyup", (e: KeyboardEvent) => {
+    const d = state.warthogDrive;
     switch (e.key) {
-      case "ArrowLeft":  case "a": case "A": _driveLeft  = false; break;
-      case "ArrowRight": case "d": case "D": _driveRight = false; break;
-      case "ArrowUp":    case "w": case "W": _driveUp    = false; break;
-      case "ArrowDown":  case "s": case "S": _driveDown  = false; break;
+      case "ArrowLeft":  case "a": case "A": d.left  = false; break;
+      case "ArrowRight": case "d": case "D": d.right = false; break;
+      case "ArrowUp":    case "w": case "W": d.up    = false; break;
+      case "ArrowDown":  case "s": case "S": d.down  = false; break;
     }
   });
 }
 
-// Consume E press (one-shot per frame)
-function consumeE(): boolean {
-  if (_ePressed) { _ePressed = false; return true; }
-  return false;
-}
-
-// ── Network send helpers (imported from network.ts at call site) ─────────────
-
-let _sendFn: ((type: string, payload?: Record<string, unknown>) => void) | null = null;
-
-export function setWarthogSendFn(fn: (type: string, payload?: Record<string, unknown>) => void): void {
-  _sendFn = fn;
-}
-
-function send(type: string, payload?: Record<string, unknown>): void {
-  if (_sendFn) _sendFn(type, payload);
-}
-
 // ── Tick logic ───────────────────────────────────────────────────────────────
+// sendFn is passed in as a parameter so this module has no stored reference to
+// the network layer (avoids module-level mutable _sendFn).
 
-export function tickWarthog(state: WorldState): void {
-  const { warthog, localPlayer } = state;
+export function tickWarthog(
+  state: WorldState,
+  sendFn: (type: string, payload?: Record<string, unknown>) => void
+): void {
+  const { warthog, localPlayer, warthogDrive: d } = state;
   if (!warthog || !localPlayer) return;
 
-  // E-key: toggle join/leave
-  if (consumeE()) {
+  // E-key: toggle join/leave (one-shot per frame)
+  if (d.ePressedOnce) {
+    d.ePressedOnce = false;
     const myId = localPlayer.socketId;
     const seated = warthog.seats.includes(myId);
     if (seated) {
-      send("warthog_leave");
-      state.seatedInWarthog = false;
+      sendFn("warthog_leave");
+      // Don't optimistically set seatedInWarthog here — the server confirmation
+      // (seats array update) will clear it on the next tick below.
     } else {
       // Only attempt if close enough
       const dx = localPlayer.x - warthog.x;
       const dy = localPlayer.y - warthog.y;
       if (Math.sqrt(dx * dx + dy * dy) < BOARD_DISTANCE) {
-        send("warthog_join");
-        state.seatedInWarthog = true;
+        sendFn("warthog_join");
+        // Don't optimistically set seatedInWarthog = true here — it would be
+        // immediately overwritten by the server-confirmed check below anyway.
       }
     }
   }
 
-  // Check if we're actually in a seat (server may reject join)
-  if (localPlayer) {
-    state.seatedInWarthog = warthog.seats.includes(localPlayer.socketId);
-  }
+  // Server-confirmed seat state (authoritative)
+  state.seatedInWarthog = warthog.seats.includes(localPlayer.socketId);
 
   // WASD driving — only if we are driver (seat 0)
   if (state.seatedInWarthog && warthog.seats[0] === localPlayer.socketId) {
-    const dx = (_driveRight ? 1 : 0) - (_driveLeft ? 1 : 0);
-    const dy = (_driveDown  ? 1 : 0) - (_driveUp   ? 1 : 0);
-    send("warthog_input", { dx, dy });
+    const dx = (d.right ? 1 : 0) - (d.left ? 1 : 0);
+    const dy = (d.down  ? 1 : 0) - (d.up   ? 1 : 0);
+    sendFn("warthog_input", { dx, dy });
   }
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────────
-
-function lightenHex(hex: string, amount: number): string {
-  const h = hex.replace("#", "");
-  const num = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h, 16);
-  const r = Math.min(255, ((num >> 16) & 0xff) + amount);
-  const g = Math.min(255, ((num >> 8) & 0xff) + amount);
-  const b = Math.min(255, (num & 0xff) + amount);
-  return `rgb(${r},${g},${b})`;
-}
 
 export function drawWarthog(
   ctx: CanvasRenderingContext2D,
