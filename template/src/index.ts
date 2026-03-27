@@ -28,7 +28,7 @@ const server = Bun.serve({
   <title>${LAB_NAME}</title>
   <style>
     body { font-family: monospace; max-width: 600px; margin: 80px auto; padding: 0 20px;
-           background: #0d0d0d; color: #e0e0e0; }
+           background: #0d0d0d; color: #e0e0e0; padding-top: 32px; }
     h1 { font-size: 1.4rem; }
     .count { color: #7eb8f7; }
   </style>
