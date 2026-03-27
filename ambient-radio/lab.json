@@ -1,0 +1,8 @@
+{
+  "name": "ambient-radio",
+  "title": "Ambient Radio",
+  "description": "Curated ambient and lo-fi streams — pick a vibe, hit play. Rotates through community-added YouTube playlists and tracks.",
+  "port": 8111,
+  "status": "active",
+  "rationale": "Discord signal: koole__ explicitly said 'commons soundtrack is like a 3h ambience youtube video playlist that rotates' (2026-03-26) and 'clungus play siena sleep mix trance mix 13.2 from the grave' (2026-03-25), and linked a specific Japanese garden ambient video saying 'just do this' (2026-03-26). Multiple users with distinct music/ambient interests — koole__ into trance/ambient, jaboostin into background focus music. No existing lab covers music or ambient audio. Siena Sleep Mix seeded directly from koole__ request."
+}
