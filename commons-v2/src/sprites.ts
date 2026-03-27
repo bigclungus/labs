@@ -1,49 +1,44 @@
 // sprites.ts — Sprite winner polling for NPC rendering
 // Mirrors V1 grazing.html SPRITE_SLUG_MAP + fetchSpriteWinners logic
 
-// Maps NPC slug → human-readable display name
-export const NPC_DISPLAY_NAMES: Record<string, string> = {
-  'chairman':          'Ibrahim the Immovable',
-  'critic':            'Pippi the Pitiless',
-  'architect':         'Kwame the Constructor',
-  'ux':                'Yuki the Yielding',
-  'designer':          'Vesper the Vivid',
-  'galactus':          'Galactus',
-  'hume':              'David Hume',
-  'otto':              'Otto Atreides',
-  'pm':                "Chud O'Bikeshedder",
-  'spengler':          'Spengler the Doomed',
-  'trump':             'Punished Trump',
-  'uncle-bob':         'Uncle Bob',
-  'bloodfeast':        'Holden Bloodfeast',
-  'adelbert':          'Adelbert Hominem',
-  'jhaddu':            'Jhaddu',
-  'morgan':            'Morgan (they/them)',
-  'the-kid':           'The Kid',
-  'the-correspondent': 'The Correspondent',
-  'chaz':              'Chaz the Destroyer',
+// Single source of truth for all NPC metadata.
+// displayName: human-readable label shown on hover.
+// sprite: present only for NPCs with a sprite poll; id = sprite function prefix,
+//         pollSlug = /api/vote/sprite-<pollSlug> key.
+const NPC_REGISTRY: Record<string, { displayName: string; sprite?: { id: string; pollSlug: string } }> = {
+  'chairman':          { displayName: 'Ibrahim the Immovable',  sprite: { id: 'chairman',   pollSlug: 'chairman'   } },
+  'critic':            { displayName: 'Pippi the Pitiless',     sprite: { id: 'critic',     pollSlug: 'critic'     } },
+  'architect':         { displayName: 'Kwame the Constructor',  sprite: { id: 'architect',  pollSlug: 'architect'  } },
+  'ux':                { displayName: 'Yuki the Yielding',      sprite: { id: 'ux',         pollSlug: 'ux'         } },
+  'designer':          { displayName: 'Vesper the Vivid',       sprite: { id: 'designer',   pollSlug: 'designer'   } },
+  'galactus':          { displayName: 'Galactus',               sprite: { id: 'galactus',   pollSlug: 'galactus'   } },
+  'hume':              { displayName: 'David Hume',             sprite: { id: 'hume',       pollSlug: 'hume'       } },
+  'otto':              { displayName: 'Otto Atreides',          sprite: { id: 'otto',       pollSlug: 'otto'       } },
+  'pm':                { displayName: "Chud O'Bikeshedder",     sprite: { id: 'pm',         pollSlug: 'pm'         } },
+  'spengler':          { displayName: 'Spengler the Doomed',    sprite: { id: 'spengler',   pollSlug: 'spengler'   } },
+  'trump':             { displayName: 'Punished Trump',         sprite: { id: 'trump',      pollSlug: 'trump'      } },
+  'uncle-bob':         { displayName: 'Uncle Bob',              sprite: { id: 'unclebob',   pollSlug: 'uncle-bob'  } },
+  'bloodfeast':        { displayName: 'Holden Bloodfeast',      sprite: { id: 'bloodfeast', pollSlug: 'bloodfeast' } },
+  'adelbert':          { displayName: 'Adelbert Hominem',       sprite: { id: 'adelbert',   pollSlug: 'adelbert'   } },
+  'jhaddu':            { displayName: 'Jhaddu',                 sprite: { id: 'jhaddu',     pollSlug: 'jhaddu'     } },
+  'morgan':            { displayName: 'Morgan (they/them)',     sprite: { id: 'morgan',     pollSlug: 'morgan'     } },
+  'the-kid':           { displayName: 'The Kid',                sprite: { id: 'the_kid',    pollSlug: 'the-kid'    } },
+  'the-correspondent': { displayName: 'The Correspondent' },
+  'chaz':              { displayName: 'Chaz the Destroyer' },
 };
 
+// Derived maps — do not edit these directly; update NPC_REGISTRY above.
+export const NPC_DISPLAY_NAMES: Record<string, string> = Object.fromEntries(
+  Object.entries(NPC_REGISTRY).map(([slug, { displayName }]) => [slug, displayName])
+);
+
 // Maps NPC name (server slug) → { id: sprite function ID, pollSlug: poll slug }
-const SPRITE_SLUG_MAP: Record<string, { id: string; pollSlug: string }> = {
-  'chairman':   { id: 'chairman',   pollSlug: 'chairman'  },
-  'critic':     { id: 'critic',     pollSlug: 'critic'    },
-  'architect':  { id: 'architect',  pollSlug: 'architect' },
-  'ux':         { id: 'ux',         pollSlug: 'ux'        },
-  'designer':   { id: 'designer',   pollSlug: 'designer'  },
-  'galactus':   { id: 'galactus',   pollSlug: 'galactus'  },
-  'hume':       { id: 'hume',       pollSlug: 'hume'      },
-  'otto':       { id: 'otto',       pollSlug: 'otto'      },
-  'pm':         { id: 'pm',         pollSlug: 'pm'        },
-  'spengler':   { id: 'spengler',   pollSlug: 'spengler'  },
-  'trump':      { id: 'trump',      pollSlug: 'trump'     },
-  'uncle-bob':  { id: 'unclebob',   pollSlug: 'uncle-bob' },
-  'bloodfeast': { id: 'bloodfeast', pollSlug: 'bloodfeast'},
-  'adelbert':   { id: 'adelbert',   pollSlug: 'adelbert'  },
-  'jhaddu':     { id: 'jhaddu',     pollSlug: 'jhaddu'    },
-  'morgan':     { id: 'morgan',     pollSlug: 'morgan'    },
-  'the-kid':    { id: 'the_kid',    pollSlug: 'the-kid'   },
-};
+// Only NPCs with sprite entries appear here.
+const SPRITE_SLUG_MAP: Record<string, { id: string; pollSlug: string }> = Object.fromEntries(
+  Object.entries(NPC_REGISTRY)
+    .filter(([, { sprite }]) => sprite !== undefined)
+    .map(([slug, { sprite }]) => [slug, sprite!])
+);
 
 // Current winners: npcName → "A"|"B"|"C"
 const SPRITE_WINNERS: Record<string, string> = {};
