@@ -1,8 +1,0 @@
-{
-  "name": "tvtropes-explorer",
-  "title": "TVTropes Explorer",
-  "description": "Look up and browse TVTropes pages cleanly — no ads, no sidebar clutter, just the trope content",
-  "port": 8106,
-  "status": "active",
-  "rationale": "Graph signal: Graeme expressed interest in indexing TVTropes for cultural reasons across multiple episodes (9dac5cf8, 0e5258c3) and asked if BigClungus could operate a PostgreSQL DB to store TVTropes data. Graeme also noted that physical media helps avoid algoslop doomscrolling — a clean TVTropes reader removes exactly that. Jaboostin also plays EU-series games, which TVTropes extensively documents."
-}

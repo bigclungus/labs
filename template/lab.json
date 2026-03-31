@@ -3,5 +3,5 @@
   "title": "Template Lab",
   "description": "Starter template for a new lab experiment",
   "port": 8100,
-  "status": "active"
+  "status": "inactive"
 }

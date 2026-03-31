@@ -20,8 +20,8 @@ async function getUser(req: Request): Promise<{ login: string } | null> {
     if (cookie) headers["Cookie"] = cookie;
     const res = await fetch(`${API_ORIGIN}/api/me`, { headers });
     if (!res.ok) return null;
-    const data = (await res.json()) as { login?: string };
-    return data.login ? { login: data.login } : null;
+    const data = (await res.json()) as { username?: string };
+    return data.username ? { login: data.username } : null;
   } catch {
     return null;
   }
@@ -740,7 +740,7 @@ function buildGeneratorPage(base: string): string {
         const res = await fetch(BASE + "/api/me");
         if (!res.ok) throw new Error("not authed");
         const data = await res.json();
-        currentUser = data.login;
+        currentUser = data.username;
         document.getElementById("auth-gate").style.display = "none";
         document.getElementById("generator").style.display = "block";
         renderEquipment();
